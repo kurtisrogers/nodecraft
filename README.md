@@ -32,6 +32,11 @@ A Minecraft-like voxel sandbox game built with **Node.js** and **Three.js**.
 - **Real-time sync** — movement, block placement, and mob state synced across clients
 - **Not available on GitHub Pages** — requires the Node.js server for WebSocket support
 
+### Mobile
+- **Touch controls** — virtual joystick, drag-to-look, on-screen action buttons
+- **Works on phones & tablets** — iOS Safari, Android Chrome, and GitHub Pages
+- **Tap hotbar slots** to switch blocks; bag button opens inventory & crafting
+
 ## Quick Start
 
 ### Local (full game + multiplayer)
@@ -57,6 +62,8 @@ To test static mode locally: `npm start` then open `http://localhost:3000/?stati
 
 ## Controls
 
+### Desktop
+
 | Key | Action |
 |-----|--------|
 | `W A S D` | Move |
@@ -68,6 +75,19 @@ To test static mode locally: `npm start` then open `http://localhost:3000/?stati
 | `E` | Open inventory & crafting |
 | `1-9` | Select hotbar slot |
 | `Scroll` | Cycle hotbar |
+
+### Mobile
+
+| Control | Action |
+|---------|--------|
+| Joystick (left) | Move |
+| Drag right side | Look around |
+| ⬆ | Jump |
+| ⚡ | Sprint |
+| ⛏ | Break / Attack |
+| ▣ | Place block |
+| 🎒 | Inventory & crafting |
+| Hotbar tap | Select block |
 
 ## Crafting Recipes
 

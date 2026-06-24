@@ -9,7 +9,8 @@ import { NetworkClient } from './network.js';
 import { RemotePlayerManager } from './remotePlayers.js';
 import { GameUI } from './ui.js';
 import { MessageType } from './protocol-shim.js';
-import { isStaticDeploy } from './config.js';
+import { isStaticDeploy, isMobileDevice } from './config.js';
+import { TouchControls } from './touchControls.js';
 
 class Game {
   constructor() {
@@ -52,7 +53,7 @@ class Game {
     this.player.onPlaceBlock = () => this.placeBlock();
     this.player.onHotbarChange = () => this.ui.refreshHotbar();
     this.player.onToggleInventory = () => this.toggleInventory();
-    this.player.onInventoryOpen = () => this.ui.open;
+    this.player.onInventoryOpen = () => this.ui.isOpen();
 
     this.ui = new GameUI(this);
 
@@ -63,6 +64,11 @@ class Game {
     this.worldRenderer.update(this.player.position.x, this.player.position.z);
 
     this.setupNetwork();
+
+    if (document.getElementById('mobile-controls') && isMobileDevice()) {
+      this.touchControls = new TouchControls(this.player, this);
+      this.touchControls.init();
+    }
 
     window.addEventListener('resize', () => this.onResize());
     this.loadingEl.classList.add('hidden');
@@ -244,7 +250,7 @@ class Game {
     this.ui.setTimeOfDay(this.mobManager.dayTime, this.mobManager.isNight);
 
     const hit = this.player.raycast();
-    if (hit && this.player.pointerLocked && !this.ui.open) {
+    if (hit && this.player.isControlling() && !this.ui.open) {
       this.highlight.show(hit.block.x, hit.block.y, hit.block.z);
     } else {
       this.highlight.hide();
