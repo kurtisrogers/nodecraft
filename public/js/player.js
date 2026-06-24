@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BlockId, isSolid } from './blocks.js';
+import { BlockId, isSolid, isLava } from './blocks.js';
 import { WORLD_HEIGHT } from './world.js';
 import { Inventory } from './inventory.js';
 import { isBlockItem } from './items.js';
@@ -35,6 +35,7 @@ export class Player {
     this.touchMove = { x: 0, z: 0 };
     this.touchJump = false;
     this.touchSprint = false;
+    this.lavaDamageTimer = 0;
   }
 
   spawn() {
@@ -248,10 +249,45 @@ export class Player {
       return;
     }
 
+    this.checkLavaDamage(dt);
+
     this.velocity.y += GRAVITY * dt;
     this.moveWithCollision(dt);
     this.updateCamera();
     this.onMove?.();
+  }
+
+  checkLavaDamage(dt) {
+    const px = Math.floor(this.position.x);
+    const py = Math.floor(this.position.y);
+    const pz = Math.floor(this.position.z);
+    let inLava = false;
+
+    for (let y = py; y <= py + 1; y++) {
+      if (isLava(this.world.getBlock(px, y, pz))) {
+        inLava = true;
+        break;
+      }
+    }
+
+    if (!inLava) {
+      this.lavaDamageTimer = 0;
+      return;
+    }
+
+    this.velocity.y = Math.max(this.velocity.y, -2);
+    this.velocity.x *= 0.85;
+    this.velocity.z *= 0.85;
+
+    this.lavaDamageTimer += dt;
+    if (this.lavaDamageTimer >= 0.5) {
+      this.lavaDamageTimer = 0;
+      this.health -= 4;
+      if (this.health <= 0) {
+        this.health = this.maxHealth;
+        this.spawn();
+      }
+    }
   }
 
   moveWithCollision(dt) {

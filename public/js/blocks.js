@@ -13,6 +13,8 @@ export const BlockId = {
   GLASS: 11,
   SNOW: 12,
   CRAFTING_TABLE: 13,
+  LAVA: 14,
+  OBSIDIAN: 15,
 };
 
 export const BLOCKS = {
@@ -116,6 +118,22 @@ export const BLOCKS = {
     transparent: false,
     color: { top: 0xc4a35a, side: 0x8b6914, bottom: 0x6b4423 },
   },
+  [BlockId.LAVA]: {
+    id: BlockId.LAVA,
+    name: 'Lava',
+    solid: false,
+    transparent: true,
+    color: 0xff5500,
+    emissive: true,
+    damages: true,
+  },
+  [BlockId.OBSIDIAN]: {
+    id: BlockId.OBSIDIAN,
+    name: 'Obsidian',
+    solid: true,
+    transparent: false,
+    color: 0x1a0a2e,
+  },
 };
 
 export const HOTBAR_BLOCKS = [
@@ -126,7 +144,7 @@ export const HOTBAR_BLOCKS = [
   BlockId.WOOD,
   BlockId.PLANKS,
   BlockId.LEAVES,
-  BlockId.SAND,
+  BlockId.OBSIDIAN,
   BlockId.GLASS,
 ];
 
@@ -136,6 +154,10 @@ export function isSolid(blockId) {
 
 export function isTransparent(blockId) {
   return BLOCKS[blockId]?.transparent ?? true;
+}
+
+export function isLava(blockId) {
+  return blockId === BlockId.LAVA;
 }
 
 export function getBlockColor(blockId, face) {

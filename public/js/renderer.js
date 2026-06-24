@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getBlockColor, isTransparent } from './blocks.js';
+import { getBlockColor, isTransparent, BLOCKS } from './blocks.js';
 import { CHUNK_SIZE, WORLD_HEIGHT } from './world.js';
 
 const FACE_DIRECTIONS = [
@@ -15,6 +15,9 @@ function addFace(vertices, normals, colors, x, y, z, face, blockId, dir) {
   const color = new THREE.Color(getBlockColor(blockId, face));
   const shade = face === 'top' ? 1.0 : face === 'bottom' ? 0.6 : 0.8;
   color.multiplyScalar(shade);
+  if (BLOCKS[blockId]?.emissive) {
+    color.multiplyScalar(1.5);
+  }
 
   const positions = {
     top: [

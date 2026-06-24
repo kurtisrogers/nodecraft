@@ -211,6 +211,8 @@ export class Mob {
   }
 }
 
+const DAY_LENGTH = 240;
+
 export class MobManager {
   constructor(scene, world) {
     this.scene = scene;
@@ -223,7 +225,7 @@ export class MobManager {
   }
 
   get isNight() {
-    const cycle = (this.dayTime % 120) / 120;
+    const cycle = (this.dayTime % DAY_LENGTH) / DAY_LENGTH;
     return cycle > 0.5;
   }
 

@@ -85,4 +85,39 @@ export class NoiseGenerator {
   treeChance(worldX, worldZ) {
     return this.fbm(worldX * 0.1 + 500, worldZ * 0.1 + 500, 2);
   }
+
+  hash2D(x, z) {
+    let h = (x * 374761393 + z * 668265263 + this.seed * 1013904223) | 0;
+    h = ((h ^ (h >>> 13)) * 1274126177) | 0;
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+
+  roll(worldX, worldZ, salt = 0) {
+    return (this.hash2D(worldX + salt * 997, worldZ + salt * 131) % 10000) / 10000;
+  }
+
+  isVolcanic(worldX, worldZ) {
+    const biome = this.biome(worldX, worldZ);
+    return biome.temperature > 0.35 && biome.moisture < 0;
+  }
+
+  isForest(worldX, worldZ) {
+    const biome = this.biome(worldX, worldZ);
+    return biome.moisture > 0.05 && biome.temperature > -0.2 && biome.temperature < 0.35;
+  }
+
+  shouldPlaceTree(worldX, worldZ) {
+    const biome = this.biome(worldX, worldZ);
+    const isDesert = biome.temperature > 0.3 && biome.moisture < -0.1;
+    const isSnow = biome.temperature < -0.3;
+    if (isDesert || isSnow) return false;
+
+    const roll = this.roll(worldX, worldZ, 7);
+    if (this.isForest(worldX, worldZ)) return roll < 0.14;
+    return roll < 0.06;
+  }
+
+  lavaPoolChance(worldX, worldZ) {
+    return this.fbm(worldX * 0.06 + 2000, worldZ * 0.06 + 2000, 3);
+  }
 }

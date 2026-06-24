@@ -15,6 +15,8 @@ export const ItemId = {
   GLASS: 11,
   SNOW: 12,
   CRAFTING_TABLE: 13,
+  LAVA: 14,
+  OBSIDIAN: 15,
   STICK: 100,
   RAW_PORK: 101,
   LEATHER: 102,
@@ -42,6 +44,7 @@ export const BLOCK_DROPS = {
   [ItemId.GLASS]: ItemId.GLASS,
   [ItemId.SNOW]: ItemId.SNOW,
   [ItemId.CRAFTING_TABLE]: ItemId.CRAFTING_TABLE,
+  [ItemId.OBSIDIAN]: ItemId.OBSIDIAN,
 };
 
 export function isBlockItem(itemId) {

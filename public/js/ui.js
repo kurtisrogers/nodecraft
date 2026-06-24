@@ -13,6 +13,8 @@ export class GameUI {
     this.recipeList = document.getElementById('recipe-list');
     this.playerCountEl = document.getElementById('player-count');
     this.timeEl = document.getElementById('time-display');
+    this.weatherEl = document.getElementById('weather-display');
+    this.healthEl = document.getElementById('health-display');
     this.open = false;
     this.buildRecipeList();
     this.setupMenuClose();
@@ -167,6 +169,24 @@ export class GameUI {
       } else {
         this.playerCountEl.textContent = `${count} player${count !== 1 ? 's' : ''} online`;
       }
+    }
+  }
+
+  setEnvironment(env) {
+    if (this.timeEl) {
+      this.timeEl.textContent = env.timeLabel;
+      this.timeEl.classList.toggle('night', env.isNight);
+    }
+    if (this.weatherEl) {
+      this.weatherEl.textContent = env.weatherLabel;
+      this.weatherEl.className = '';
+      if (env.weatherLabel === 'Rain') this.weatherEl.classList.add('rain');
+      if (env.weatherLabel === 'Thunderstorm') this.weatherEl.classList.add('thunder');
+      if (env.weatherLabel === 'Snow') this.weatherEl.classList.add('snow');
+    }
+    if (this.healthEl && this.game.player) {
+      const h = Math.max(0, Math.ceil(this.game.player.health));
+      this.healthEl.textContent = `❤ ${h}/${this.game.player.maxHealth}`;
     }
   }
 

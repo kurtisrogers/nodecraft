@@ -11,6 +11,7 @@ import { GameUI } from './ui.js';
 import { MessageType } from './protocol-shim.js';
 import { isStaticDeploy, isMobileDevice } from './config.js';
 import { TouchControls } from './touchControls.js';
+import { WeatherSystem } from './weather.js';
 
 class Game {
   constructor() {
@@ -36,10 +37,13 @@ class Game {
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-    sun.position.set(50, 100, 30);
-    this.scene.add(sun);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    this.scene.add(this.ambientLight);
+    this.sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    this.sunLight.position.set(50, 100, 30);
+    this.scene.add(this.sunLight);
+
+    this.weather = new WeatherSystem(this.scene, this.camera);
 
     this.world = new World(42);
     this.worldRenderer = new WorldRenderer(this.scene, this.world);
@@ -93,7 +97,8 @@ class Game {
     this.player.world = this.world;
     this.mobManager.world = this.world;
     this.mobManager.syncFromServer(mobs, this.scene);
-    this.mobManager.dayTime = dayTime ?? 0;
+    this.weather.syncDayTime(dayTime ?? 0);
+    this.mobManager.dayTime = this.weather.dayTime;
     this.remotePlayers.sync(players, playerId);
     this.ui.setPlayerCount(players.length);
     this.world.loadChunksAround(0, 0);
@@ -139,7 +144,7 @@ class Game {
 
     this.network.on(MessageType.MOBS_SYNC, (msg) => {
       this.mobManager.syncFromServer(msg.mobs, this.scene);
-      if (msg.dayTime !== undefined) this.mobManager.dayTime = msg.dayTime;
+      if (msg.dayTime !== undefined) this.weather.syncDayTime(msg.dayTime);
     });
 
     this.network.on(MessageType.MOB_UPDATE, (msg) => {
@@ -192,7 +197,7 @@ class Game {
     if (!hit) return;
     const { x, y, z } = hit.block;
     const blockId = this.world.getBlock(x, y, z);
-    if (blockId === BlockId.BEDROCK) return;
+    if (blockId === BlockId.BEDROCK || blockId === BlockId.LAVA) return;
 
     const drop = BLOCK_DROPS[blockId];
     if (drop) this.player.inventory.addItem(drop, 1);
@@ -250,9 +255,16 @@ class Game {
         const p = this.player.position;
         this.network.sendMove(p.x, p.y, p.z, this.player.yaw, this.player.pitch);
       }
+      this.mobManager.dayTime = this.weather.dayTime;
     }
 
-    this.ui.setTimeOfDay(this.mobManager.dayTime, this.mobManager.isNight);
+    const env = this.weather.update(dt, this.player.position);
+    this.mobManager.dayTime = this.weather.dayTime;
+    this.ui.setEnvironment(env);
+    this.ambientLight.intensity = env.ambientIntensity;
+    this.sunLight.intensity = env.sunIntensity;
+    this.renderer.setClearColor(env.skyColor);
+    this.scene.fog.color.copy(env.fogColor);
 
     const hit = this.player.raycast();
     if (hit && this.player.isControlling() && !this.ui.open) {

@@ -78,9 +78,59 @@ export class Chunk {
         }
 
         if (height > SEA_LEVEL + 1 && !isDesert && !isSnow) {
-          const treeVal = this.noise.treeChance(worldX, worldZ);
-          if (treeVal > 0.55 && treeVal < 0.58) {
+          if (this.noise.shouldPlaceTree(worldX, worldZ)) {
             this.generateTree(x, height, z);
+          }
+        }
+
+        if (this.noise.isVolcanic(worldX, worldZ)) {
+          this.generateVolcanicFeatures(x, z, height);
+        } else {
+          this.generateUndergroundLava(x, z, height);
+        }
+      }
+    }
+  }
+
+  generateVolcanicFeatures(x, z, height) {
+    const poolRoll = this.noise.roll(this.chunkX * CHUNK_SIZE + x, this.chunkZ * CHUNK_SIZE + z, 31);
+    if (poolRoll > 0.92 && height > SEA_LEVEL + 2) {
+      const y = height;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          if (Math.abs(dx) + Math.abs(dz) > 1) continue;
+          const lx = x + dx;
+          const lz = z + dz;
+          if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
+          this.setBlock(lx, y, lz, BlockId.LAVA);
+          if (y > 1) this.setBlock(lx, y - 1, lz, BlockId.STONE);
+        }
+      }
+      return;
+    }
+    this.generateUndergroundLava(x, z, height);
+  }
+
+  generateUndergroundLava(x, z, height) {
+    const worldX = this.chunkX * CHUNK_SIZE + x;
+    const worldZ = this.chunkZ * CHUNK_SIZE + z;
+    const pool = this.noise.lavaPoolChance(worldX, worldZ);
+    if (pool < 0.62) return;
+
+    const depth = 2 + Math.floor(this.noise.roll(worldX, worldZ, 19) * 6);
+    const radius = this.noise.roll(worldX, worldZ, 23) > 0.7 ? 2 : 1;
+
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        if (dx * dx + dz * dz > radius * radius) continue;
+        const lx = x + dx;
+        const lz = z + dz;
+        if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
+        for (let dy = 0; dy < 2; dy++) {
+          const ly = depth + dy;
+          if (ly >= height || ly >= WORLD_HEIGHT - 1) continue;
+          if (this.getBlock(lx, ly, lz) === BlockId.STONE) {
+            this.setBlock(lx, ly, lz, dy === 0 ? BlockId.LAVA : BlockId.AIR);
           }
         }
       }
@@ -88,7 +138,14 @@ export class Chunk {
   }
 
   generateTree(x, groundY, z) {
-    const trunkHeight = 4 + Math.floor(Math.random() * 2);
+    if (this.getBlock(x, groundY, z) !== BlockId.GRASS && this.getBlock(x, groundY, z) !== BlockId.DIRT) {
+      return;
+    }
+
+    const worldX = this.chunkX * CHUNK_SIZE + x;
+    const worldZ = this.chunkZ * CHUNK_SIZE + z;
+    const variant = this.noise.roll(worldX, worldZ, 11);
+    const trunkHeight = variant > 0.7 ? 6 : variant > 0.35 ? 5 : 4;
     for (let y = 0; y < trunkHeight; y++) {
       if (groundY + y < WORLD_HEIGHT) {
         this.setBlock(x, groundY + y, z, BlockId.WOOD);
@@ -251,6 +308,7 @@ export class World {
       const headroom2 = this.getBlock(x, surfaceY + 2, z);
       if (isSolid(headroom) || isSolid(headroom2)) continue;
       if (surfaceY <= SEA_LEVEL) continue;
+      if (this.getBlock(x, surfaceY, z) === BlockId.LAVA) continue;
 
       const score = surfaceY + (x === preferredX && z === preferredZ ? 100 : 0);
       if (!best || score > best.score) {

@@ -129,6 +129,26 @@ body {
   color: #99aaff;
 }
 
+#weather-display {
+  font-weight: 600;
+}
+
+#weather-display.rain {
+  color: #88bbff;
+}
+
+#weather-display.thunder {
+  color: #ffee88;
+}
+
+#weather-display.snow {
+  color: #ddeeff;
+}
+
+#health-display {
+  color: #ff8888;
+}
+
 #player-count {
   color: #aaffaa;
 }
