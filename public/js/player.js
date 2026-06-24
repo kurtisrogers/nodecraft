@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { BlockId, HOTBAR_BLOCKS, isSolid } from './blocks.js';
+import { BlockId, isSolid } from './blocks.js';
 import { WORLD_HEIGHT } from './world.js';
+import { Inventory } from './inventory.js';
+import { isBlockItem } from './items.js';
 
 const GRAVITY = -28;
 const JUMP_VELOCITY = 9;
@@ -17,12 +19,18 @@ export class Player {
     this.position = new THREE.Vector3(0, 40, 0);
     this.velocity = new THREE.Vector3();
     this.onGround = false;
-    this.selectedBlock = BlockId.GRASS;
+    this.inventory = new Inventory();
+    this.selectedBlock = BlockId.DIRT;
     this.hotbarIndex = 0;
     this.keys = {};
     this.pointerLocked = false;
     this.yaw = 0;
     this.pitch = 0;
+    this.id = null;
+    this.name = 'Player';
+    this.health = 20;
+    this.maxHealth = 20;
+    this.attackCooldown = 0;
   }
 
   spawn() {
@@ -36,6 +44,10 @@ export class Player {
 
   setupControls(domElement) {
     document.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyE') {
+        this.onToggleInventory?.();
+        return;
+      }
       this.keys[e.code] = true;
       if (e.code.startsWith('Digit') && e.code !== 'Digit0') {
         const num = parseInt(e.code.replace('Digit', ''), 10);
@@ -58,7 +70,7 @@ export class Player {
     });
 
     domElement.addEventListener('click', () => {
-      if (!this.pointerLocked) {
+      if (!this.pointerLocked && !this.onInventoryOpen?.()) {
         domElement.requestPointerLock();
       }
     });
@@ -71,7 +83,7 @@ export class Player {
     document.addEventListener('mousedown', (e) => {
       if (!this.pointerLocked) return;
       e.preventDefault();
-      if (e.button === 0) this.onBreakBlock?.();
+      if (e.button === 0) this.onPrimaryAction?.();
       if (e.button === 2) this.onPlaceBlock?.();
     });
 
@@ -85,24 +97,19 @@ export class Player {
   }
 
   updateSelectedBlock() {
-    this.selectedBlock = HOTBAR_BLOCKS[this.hotbarIndex];
+    const itemId = this.inventory.getHotbarItem(this.hotbarIndex);
+    if (itemId && isBlockItem(itemId)) {
+      this.selectedBlock = itemId;
+    }
     this.onHotbarChange?.(this.hotbarIndex, this.selectedBlock);
   }
 
   getForward() {
-    return new THREE.Vector3(
-      -Math.sin(this.yaw),
-      0,
-      -Math.cos(this.yaw)
-    );
+    return new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
   }
 
   getRight() {
-    return new THREE.Vector3(
-      Math.cos(this.yaw),
-      0,
-      -Math.sin(this.yaw)
-    );
+    return new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
   }
 
   updateCamera() {
@@ -116,10 +123,15 @@ export class Player {
     this.camera.lookAt(this.camera.position.clone().add(lookDir));
   }
 
-  raycast(maxDistance = 6) {
-    const origin = this.camera.position.clone();
+  getLookDirection() {
     const direction = new THREE.Vector3();
     this.camera.getWorldDirection(direction);
+    return direction;
+  }
+
+  raycast(maxDistance = 6) {
+    const origin = this.camera.position.clone();
+    const direction = this.getLookDirection();
 
     let x = Math.floor(origin.x);
     let y = Math.floor(origin.y);
@@ -143,7 +155,9 @@ export class Player {
       ? (stepZ > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tDeltaZ
       : Infinity;
 
-    let prevX = x, prevY = y, prevZ = z;
+    let prevX = x;
+    let prevY = y;
+    let prevZ = z;
     let dist = 0;
 
     while (dist < maxDistance) {
@@ -180,6 +194,8 @@ export class Player {
   }
 
   update(dt) {
+    if (this.attackCooldown > 0) this.attackCooldown -= dt;
+
     if (!this.pointerLocked) {
       this.updateCamera();
       return;
@@ -210,6 +226,7 @@ export class Player {
     this.velocity.y += GRAVITY * dt;
     this.moveWithCollision(dt);
     this.updateCamera();
+    this.onMove?.();
   }
 
   moveWithCollision(dt) {

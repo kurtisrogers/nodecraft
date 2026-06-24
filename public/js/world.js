@@ -118,6 +118,36 @@ export class World {
     this.noise = new NoiseGenerator(seed);
     this.chunks = new Map();
     this.renderDistance = 4;
+    this.modifications = new Map();
+  }
+
+  modKey(x, y, z) {
+    return `${x},${y},${z}`;
+  }
+
+  applyModifications(changes) {
+    for (const { x, y, z, blockId } of changes) {
+      this.modifications.set(this.modKey(x, y, z), blockId);
+      this.setBlockLocal(x, y, z, blockId);
+    }
+  }
+
+  setBlockLocal(worldX, worldY, worldZ, blockId) {
+    if (worldY < 0 || worldY >= WORLD_HEIGHT) return false;
+    const { chunkX, chunkZ } = this.worldToChunk(worldX, worldZ);
+    const chunk = this.getChunk(chunkX, chunkZ);
+    const local = chunk.worldToLocal(worldX, worldY, worldZ);
+    const result = chunk.setBlock(local.x, local.y, local.z, blockId);
+    const neighbors = [];
+    if (local.x === 0) neighbors.push([chunkX - 1, chunkZ]);
+    if (local.x === CHUNK_SIZE - 1) neighbors.push([chunkX + 1, chunkZ]);
+    if (local.z === 0) neighbors.push([chunkX, chunkZ - 1]);
+    if (local.z === CHUNK_SIZE - 1) neighbors.push([chunkX, chunkZ + 1]);
+    for (const [nx, nz] of neighbors) {
+      const neighbor = this.chunks.get(this.chunkKey(nx, nz));
+      if (neighbor) neighbor.dirty = true;
+    }
+    return result;
   }
 
   chunkKey(chunkX, chunkZ) {
@@ -141,6 +171,8 @@ export class World {
 
   getBlock(worldX, worldY, worldZ) {
     if (worldY < 0 || worldY >= WORLD_HEIGHT) return BlockId.AIR;
+    const mod = this.modifications.get(this.modKey(worldX, worldY, worldZ));
+    if (mod !== undefined) return mod;
     const { chunkX, chunkZ } = this.worldToChunk(worldX, worldZ);
     const chunk = this.chunks.get(this.chunkKey(chunkX, chunkZ));
     if (!chunk) return BlockId.AIR;
@@ -149,22 +181,12 @@ export class World {
   }
 
   setBlock(worldX, worldY, worldZ, blockId) {
-    if (worldY < 0 || worldY >= WORLD_HEIGHT) return false;
-    const { chunkX, chunkZ } = this.worldToChunk(worldX, worldZ);
-    const chunk = this.getChunk(chunkX, chunkZ);
-    const local = chunk.worldToLocal(worldX, worldY, worldZ);
-    const result = chunk.setBlock(local.x, local.y, local.z, blockId);
-
-    const neighbors = [];
-    if (local.x === 0) neighbors.push([chunkX - 1, chunkZ]);
-    if (local.x === CHUNK_SIZE - 1) neighbors.push([chunkX + 1, chunkZ]);
-    if (local.z === 0) neighbors.push([chunkX, chunkZ - 1]);
-    if (local.z === CHUNK_SIZE - 1) neighbors.push([chunkX, chunkZ + 1]);
-    for (const [nx, nz] of neighbors) {
-      const neighbor = this.chunks.get(this.chunkKey(nx, nz));
-      if (neighbor) neighbor.dirty = true;
+    if (blockId === BlockId.AIR) {
+      this.modifications.delete(this.modKey(worldX, worldY, worldZ));
+    } else {
+      this.modifications.set(this.modKey(worldX, worldY, worldZ), blockId);
     }
-    return result;
+    return this.setBlockLocal(worldX, worldY, worldZ, blockId);
   }
 
   isBlockSolid(worldX, worldY, worldZ) {

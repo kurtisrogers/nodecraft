@@ -12,6 +12,7 @@ export const BlockId = {
   PLANKS: 10,
   GLASS: 11,
   SNOW: 12,
+  CRAFTING_TABLE: 13,
 };
 
 export const BLOCKS = {
@@ -107,6 +108,13 @@ export const BLOCKS = {
     solid: true,
     transparent: false,
     color: 0xffffff,
+  },
+  [BlockId.CRAFTING_TABLE]: {
+    id: BlockId.CRAFTING_TABLE,
+    name: 'Crafting Table',
+    solid: true,
+    transparent: false,
+    color: { top: 0xc4a35a, side: 0x8b6914, bottom: 0x6b4423 },
   },
 };
 

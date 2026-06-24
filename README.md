@@ -6,14 +6,30 @@ A Minecraft-like voxel sandbox game built with **Node.js** and **Three.js**.
 
 ## Features
 
+### World & Building
 - **Procedural terrain** — infinite world generated with Perlin noise
 - **Biomes** — grasslands, deserts, snowy peaks, and oceans
 - **Trees** — procedurally placed oak trees
-- **First-person controls** — WASD movement, mouse look, jumping, sprinting
 - **Block interaction** — break blocks (LMB) and place blocks (RMB)
-- **13 block types** — grass, dirt, stone, wood, leaves, sand, glass, and more
-- **Chunk system** — 16×64×16 chunks with dynamic loading/unloading
-- **Hotbar** — 9-slot inventory with scroll wheel and number keys
+- **13+ block types** — grass, dirt, stone, wood, glass, crafting table, and more
+
+### Crafting & Inventory
+- **Full inventory system** — 36 slots with stackable items (press `E`)
+- **Block drops** — breaking blocks adds resources to your inventory
+- **Crafting recipes** — wood → planks → sticks, crafting table, glass, and more
+- **Recipe panel** — click available recipes to craft instantly
+
+### Mobs
+- **Pigs & Cows** — passive mobs that wander during the day
+- **Zombies** — hostile mobs that chase players at night
+- **Combat** — attack mobs with LMB to collect drops (pork, beef, leather, rotten flesh)
+- **Day/night cycle** — sky color changes, zombie spawning at night
+
+### Multiplayer
+- **WebSocket server** — automatic multiplayer when you connect
+- **Shared world** — all players see the same terrain, block changes, and mobs
+- **Player avatars** — see other players with name tags in the world
+- **Real-time sync** — movement, block placement, and mob state synced across clients
 
 ## Quick Start
 
@@ -22,7 +38,7 @@ npm install
 npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser and click to play.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Open multiple tabs or share the URL with friends for multiplayer.
 
 ## Controls
 
@@ -32,33 +48,47 @@ Open [http://localhost:3000](http://localhost:3000) in your browser and click to
 | `Space` | Jump |
 | `Shift` | Sprint |
 | `Mouse` | Look around |
-| `LMB` | Break block |
+| `LMB` | Break block / Attack mob |
 | `RMB` | Place block |
-| `1-9` | Select block type |
+| `E` | Open inventory & crafting |
+| `1-9` | Select hotbar slot |
 | `Scroll` | Cycle hotbar |
+
+## Crafting Recipes
+
+| Recipe | Ingredients | Output |
+|--------|-------------|--------|
+| Planks | 1 Wood | 4 Planks |
+| Sticks | 2 Planks | 4 Sticks |
+| Crafting Table | 4 Planks (2×2) | 1 Crafting Table |
+| Glass | 4 Sand (2×2) | 4 Glass |
+| Cobblestone | 1 Stone | 1 Cobblestone |
 
 ## Architecture
 
 ```
 src/
-  server.js          # Express static file server
+  server.js          # Express + WebSocket server
+  gameServer.js      # Authoritative game state (players, mobs, blocks)
+  shared/protocol.js # Network message types
 public/
-  index.html         # Game page
-  css/style.css      # HUD styling
   js/
-    main.js          # Game loop & initialization
-    world.js         # Chunk & world management
-    blocks.js        # Block definitions
-    noise.js         # Terrain noise generator
-    renderer.js      # Three.js mesh builder
-    player.js        # Player physics & controls
+    main.js          # Game loop & system integration
+    world.js         # Chunk & terrain generation
+    inventory.js     # Inventory management
+    crafting.js      # Crafting recipes
+    items.js         # Item & drop definitions
+    mobs.js          # Mob AI, rendering, spawning
+    network.js       # WebSocket client
+    remotePlayers.js # Other player rendering
+    ui.js            # Inventory & crafting UI
 ```
 
 ## Tech Stack
 
-- **Node.js** + **Express** — HTTP server
+- **Node.js** + **Express** + **ws** — HTTP and WebSocket server
 - **Three.js** — WebGL 3D rendering
-- **Vanilla JS** — No build step required
+- **Vanilla JS** — ES modules, no build step
 
 ## License
 
