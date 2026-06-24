@@ -15,6 +15,7 @@ export class GameUI {
     this.timeEl = document.getElementById('time-display');
     this.weatherEl = document.getElementById('weather-display');
     this.healthEl = document.getElementById('health-display');
+    this.buildInfoEl = document.getElementById('build-info');
     this.open = false;
     this.buildRecipeList();
     this.setupMenuClose();
@@ -159,6 +160,12 @@ export class GameUI {
     const { inventory } = this.game.player;
     for (let i = HOTBAR_SIZE; i < TOTAL_SLOTS; i++) {
       grid.appendChild(this.renderSlot(inventory.getSlot(i), i));
+    }
+  }
+
+  setBuildInfo(version, renderDistance) {
+    if (this.buildInfoEl) {
+      this.buildInfoEl.textContent = `v${version} · draw ${renderDistance}`;
     }
   }
 

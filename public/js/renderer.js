@@ -149,22 +149,21 @@ export class WorldRenderer {
     const chunks = this.world.loadChunksAround(playerX, playerZ);
     this.world.unloadDistantChunks(playerX, playerZ);
 
-    const activeKeys = new Set();
+    const activeKeys = new Set(chunks.map((chunk) => `${chunk.chunkX},${chunk.chunkZ}`));
 
+    // Mesh only after the full chunk ring is loaded so border faces are correct.
     for (const chunk of chunks) {
       const key = `${chunk.chunkX},${chunk.chunkZ}`;
-      activeKeys.add(key);
+      if (!chunk.dirty && this.chunkMeshes.has(key)) continue;
 
-      if (chunk.dirty || !this.chunkMeshes.has(key)) {
-        this.removeChunkMesh(key);
-        const mesh = this.mesher.buildChunkMesh(chunk);
-        if (mesh) {
-          this.scene.add(mesh);
-          this.chunkMeshes.set(key, mesh);
-        }
-        chunk.dirty = false;
-        chunk.mesh = mesh;
+      this.removeChunkMesh(key);
+      const mesh = this.mesher.buildChunkMesh(chunk);
+      if (mesh) {
+        this.scene.add(mesh);
+        this.chunkMeshes.set(key, mesh);
       }
+      chunk.dirty = false;
+      chunk.mesh = mesh;
     }
 
     for (const [key, mesh] of this.chunkMeshes) {

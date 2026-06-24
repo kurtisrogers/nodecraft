@@ -28,3 +28,21 @@ export function isMobileDevice() {
 
   return coarsePointer || (touchCapable && narrowScreen) || mobileUa;
 }
+
+export const BUILD_VERSION = '1.5.0';
+
+const CHUNK_BLOCKS = 16;
+
+/** View distance tuned per device — desktop sees ~160 blocks, mobile ~112. */
+export function getRenderSettings() {
+  const mobile = isMobileDevice();
+  const renderDistance = mobile ? 7 : 10;
+  const blockRadius = renderDistance * CHUNK_BLOCKS;
+
+  return {
+    renderDistance,
+    cameraFar: mobile ? 360 : 480,
+    fogNear: Math.round(blockRadius * 0.35),
+    fogFar: Math.round(blockRadius * 1.75),
+  };
+}

@@ -9,7 +9,7 @@ import { NetworkClient } from './network.js';
 import { RemotePlayerManager } from './remotePlayers.js';
 import { GameUI } from './ui.js';
 import { MessageType } from './protocol-shim.js';
-import { isStaticDeploy, isMobileDevice } from './config.js';
+import { isStaticDeploy, isMobileDevice, getRenderSettings, BUILD_VERSION } from './config.js';
 import { TouchControls } from './touchControls.js';
 import { WeatherSystem } from './weather.js';
 
@@ -27,15 +27,26 @@ class Game {
   }
 
   init() {
+    this.renderSettings = getRenderSettings();
+
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setClearColor(0x87ceeb);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x87ceeb, 40, 120);
+    this.scene.fog = new THREE.Fog(
+      0x87ceeb,
+      this.renderSettings.fogNear,
+      this.renderSettings.fogFar
+    );
 
-    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
+    this.camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      this.renderSettings.cameraFar
+    );
 
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     this.scene.add(this.ambientLight);
@@ -45,7 +56,7 @@ class Game {
 
     this.weather = new WeatherSystem(this.scene, this.camera);
 
-    this.world = new World(42);
+    this.world = new World(42, this.renderSettings);
     this.worldRenderer = new WorldRenderer(this.scene, this.world);
     this.highlight = new HighlightBox(this.scene);
     this.mobManager = new MobManager(this.scene, this.world);
@@ -60,6 +71,7 @@ class Game {
     this.player.onInventoryOpen = () => this.ui.isOpen();
 
     this.ui = new GameUI(this);
+    this.ui.setBuildInfo(BUILD_VERSION, this.renderSettings.renderDistance);
 
     this.giveStarterItems();
 
@@ -91,7 +103,7 @@ class Game {
 
   resetWorld(seed, blockChanges, mobs, dayTime, players, playerId) {
     this.worldRenderer.dispose();
-    this.world = new World(seed);
+    this.world = new World(seed, this.renderSettings);
     this.world.applyModifications(blockChanges);
     this.worldRenderer = new WorldRenderer(this.scene, this.world);
     this.player.world = this.world;

@@ -1,5 +1,6 @@
 import { BlockId, isSolid, isTransparent } from './blocks.js';
 import { NoiseGenerator } from './noise.js';
+import { getRenderSettings } from './config.js';
 
 export const CHUNK_SIZE = 16;
 export const WORLD_HEIGHT = 64;
@@ -191,11 +192,11 @@ export class Chunk {
 }
 
 export class World {
-  constructor(seed = 42) {
+  constructor(seed = 42, renderSettings = getRenderSettings()) {
     this.seed = seed;
     this.noise = new NoiseGenerator(seed);
     this.chunks = new Map();
-    this.renderDistance = 4;
+    this.renderDistance = renderSettings.renderDistance;
     this.modifications = new Map();
   }
 
@@ -242,9 +243,22 @@ export class World {
   getChunk(chunkX, chunkZ) {
     const key = this.chunkKey(chunkX, chunkZ);
     if (!this.chunks.has(key)) {
-      this.chunks.set(key, new Chunk(chunkX, chunkZ, this.noise));
+      const chunk = new Chunk(chunkX, chunkZ, this.noise);
+      this.chunks.set(key, chunk);
+      this.markNeighborChunksDirty(chunkX, chunkZ);
+      return chunk;
     }
     return this.chunks.get(key);
+  }
+
+  markNeighborChunksDirty(chunkX, chunkZ) {
+    const offsets = [
+      [-1, 0], [1, 0], [0, -1], [0, 1],
+    ];
+    for (const [dx, dz] of offsets) {
+      const neighbor = this.chunks.get(this.chunkKey(chunkX + dx, chunkZ + dz));
+      if (neighbor) neighbor.dirty = true;
+    }
   }
 
   getBlock(worldX, worldY, worldZ) {
@@ -276,14 +290,18 @@ export class World {
 
   loadChunksAround(worldX, worldZ) {
     const { chunkX: centerX, chunkZ: centerZ } = this.worldToChunk(worldX, worldZ);
-    const loaded = [];
+    const pending = [];
     for (let dx = -this.renderDistance; dx <= this.renderDistance; dx++) {
       for (let dz = -this.renderDistance; dz <= this.renderDistance; dz++) {
         if (dx * dx + dz * dz > this.renderDistance * this.renderDistance) continue;
-        const cx = centerX + dx;
-        const cz = centerZ + dz;
-        loaded.push(this.getChunk(cx, cz));
+        pending.push([centerX + dx, centerZ + dz]);
       }
+    }
+
+    // Load every chunk in range before meshing so borders see real neighbors.
+    const loaded = [];
+    for (const [cx, cz] of pending) {
+      loaded.push(this.getChunk(cx, cz));
     }
     return loaded;
   }
