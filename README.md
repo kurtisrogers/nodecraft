@@ -26,12 +26,15 @@ A Minecraft-like voxel sandbox game built with **Node.js** and **Three.js**.
 - **Day/night cycle** — sky color changes, zombie spawning at night
 
 ### Multiplayer
-- **WebSocket server** — automatic multiplayer when you connect
+- **WebSocket server** — automatic multiplayer when running `npm start`
 - **Shared world** — all players see the same terrain, block changes, and mobs
 - **Player avatars** — see other players with name tags in the world
 - **Real-time sync** — movement, block placement, and mob state synced across clients
+- **Not available on GitHub Pages** — requires the Node.js server for WebSocket support
 
 ## Quick Start
+
+### Local (full game + multiplayer)
 
 ```bash
 npm install
@@ -39,6 +42,18 @@ npm start
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser. Open multiple tabs or share the URL with friends for multiplayer.
+
+### GitHub Pages (single-player)
+
+GitHub Pages only serves static files — no Node.js or WebSocket server — so the hosted build runs in **single-player mode** with crafting, mobs, and building fully playable.
+
+1. Merge this repo to `main`
+2. In your GitHub repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**
+3. The included workflow deploys the `public/` folder automatically on push to `main`
+
+Your game will be live at `https://<username>.github.io/nodecraft/`
+
+To test static mode locally: `npm start` then open `http://localhost:3000/?static`
 
 ## Controls
 

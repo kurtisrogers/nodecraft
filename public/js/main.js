@@ -9,6 +9,7 @@ import { NetworkClient } from './network.js';
 import { RemotePlayerManager } from './remotePlayers.js';
 import { GameUI } from './ui.js';
 import { MessageType } from './protocol-shim.js';
+import { isStaticDeploy } from './config.js';
 
 class Game {
   constructor() {
@@ -94,6 +95,11 @@ class Game {
     this.network = new NetworkClient();
     const name = `Player${Math.floor(Math.random() * 1000)}`;
     this.player.name = name;
+
+    this.network.onOffline = () => {
+      this.ui.setPlayerCount(1, isStaticDeploy() ? 'Single-player (GitHub Pages)' : 'Single-player');
+      this.mobManager.authoritative = true;
+    };
 
     this.network.on(MessageType.WELCOME, (msg) => {
       this.player.id = msg.playerId;

@@ -117,9 +117,13 @@ export class GameUI {
     }
   }
 
-  setPlayerCount(count) {
+  setPlayerCount(count, label) {
     if (this.playerCountEl) {
-      this.playerCountEl.textContent = `${count} player${count !== 1 ? 's' : ''} online`;
+      if (label) {
+        this.playerCountEl.textContent = label;
+      } else {
+        this.playerCountEl.textContent = `${count} player${count !== 1 ? 's' : ''} online`;
+      }
     }
   }
 

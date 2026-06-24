@@ -1,4 +1,5 @@
-import { MessageType } from '../shared/protocol.js';
+import { MessageType } from './protocol-shim.js';
+import { getWebSocketUrl, isStaticDeploy } from './config.js';
 
 export class NetworkClient {
   constructor() {
@@ -9,6 +10,10 @@ export class NetworkClient {
     this.remotePlayers = new Map();
     this.handlers = new Map();
     this.reconnectDelay = 2000;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.onOffline = null;
+    this.offline = false;
   }
 
   on(type, handler) {
@@ -16,13 +21,18 @@ export class NetworkClient {
   }
 
   connect(playerName = 'Player') {
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${location.host}`;
+    const url = getWebSocketUrl();
+    if (!url) {
+      this.enterOfflineMode();
+      return;
+    }
 
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
       this.connected = true;
+      this.offline = false;
+      this.reconnectAttempts = 0;
       this.send(MessageType.JOIN, { name: playerName });
     };
 
@@ -34,12 +44,28 @@ export class NetworkClient {
 
     this.ws.onclose = () => {
       this.connected = false;
-      setTimeout(() => this.connect(playerName), this.reconnectDelay);
+      if (isStaticDeploy()) {
+        this.enterOfflineMode();
+        return;
+      }
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts += 1;
+        setTimeout(() => this.connect(playerName), this.reconnectDelay);
+      } else {
+        this.enterOfflineMode();
+      }
     };
 
     this.ws.onerror = () => {
       this.ws?.close();
     };
+  }
+
+  enterOfflineMode() {
+    if (this.offline) return;
+    this.offline = true;
+    this.connected = false;
+    this.onOffline?.();
   }
 
   send(type, payload = {}) {
