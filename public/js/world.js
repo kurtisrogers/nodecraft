@@ -37,10 +37,12 @@ export class Chunk {
   }
 
   worldToLocal(worldX, worldY, worldZ) {
+    const chunkX = Math.floor(worldX / CHUNK_SIZE);
+    const chunkZ = Math.floor(worldZ / CHUNK_SIZE);
     return {
-      x: ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+      x: worldX - chunkX * CHUNK_SIZE,
       y: worldY,
-      z: ((worldZ % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+      z: worldZ - chunkZ * CHUNK_SIZE,
     };
   }
 
@@ -79,7 +81,10 @@ export class Chunk {
 
         if (height > SEA_LEVEL + 1 && !isDesert && !isSnow) {
           if (this.noise.shouldPlaceTree(worldX, worldZ)) {
-            this.generateTree(x, height, z);
+            const clear = this.countTreeClearance(x, z, height);
+            if (clear >= 20) {
+              this.generateTree(x, height, z);
+            }
           }
         }
 
@@ -109,6 +114,22 @@ export class Chunk {
       return;
     }
     this.generateUndergroundLava(x, z, height);
+  }
+
+  countTreeClearance(x, z, groundY) {
+    let score = 0;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const lx = x + dx;
+        const lz = z + dz;
+        if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
+        const foot = this.getBlock(lx, groundY + 1, lz);
+        const head = this.getBlock(lx, groundY + 2, lz);
+        if (foot === BlockId.AIR) score++;
+        if (head === BlockId.AIR) score++;
+      }
+    }
+    return score;
   }
 
   generateUndergroundLava(x, z, height) {
@@ -286,11 +307,43 @@ export class World {
     return 0;
   }
 
+  getWalkableSurfaceY(worldX, worldZ) {
+    this.getChunk(Math.floor(worldX / CHUNK_SIZE), Math.floor(worldZ / CHUNK_SIZE));
+    for (let y = WORLD_HEIGHT - 1; y >= 0; y--) {
+      const block = this.getBlock(worldX, y, worldZ);
+      if (
+        block === BlockId.GRASS ||
+        block === BlockId.DIRT ||
+        block === BlockId.SAND ||
+        block === BlockId.SNOW ||
+        block === BlockId.PLANKS
+      ) {
+        return y;
+      }
+    }
+    return -1;
+  }
+
+  countOpenSpace(x, z, surfaceY) {
+    let score = 0;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const bx = x + dx;
+        const bz = z + dz;
+        const foot = this.getBlock(bx, surfaceY + 1, bz);
+        const head = this.getBlock(bx, surfaceY + 2, bz);
+        if (!isSolid(foot) && foot !== BlockId.LAVA && foot !== BlockId.WATER) score++;
+        if (!isSolid(head) && head !== BlockId.LAVA && head !== BlockId.WATER) score++;
+      }
+    }
+    return score;
+  }
+
   findSafeSpawn(preferredX = 0, preferredZ = 0) {
     const candidates = [{ x: preferredX, z: preferredZ }];
-    for (let r = 1; r <= 48; r += 4) {
-      for (let a = 0; a < 8; a++) {
-        const angle = (a / 8) * Math.PI * 2;
+    for (let r = 2; r <= 40; r += 2) {
+      for (let a = 0; a < 12; a++) {
+        const angle = (a / 12) * Math.PI * 2;
         candidates.push({
           x: Math.round(preferredX + Math.cos(angle) * r),
           z: Math.round(preferredZ + Math.sin(angle) * r),
@@ -301,16 +354,15 @@ export class World {
     let best = null;
     for (const { x, z } of candidates) {
       this.getChunk(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE));
-      const surfaceY = this.getTopSolidBlockY(x, z);
-      if (surfaceY <= 0) continue;
-
-      const headroom = this.getBlock(x, surfaceY + 1, z);
-      const headroom2 = this.getBlock(x, surfaceY + 2, z);
-      if (isSolid(headroom) || isSolid(headroom2)) continue;
-      if (surfaceY <= SEA_LEVEL) continue;
+      const surfaceY = this.getWalkableSurfaceY(x, z);
+      if (surfaceY < 0 || surfaceY <= SEA_LEVEL) continue;
       if (this.getBlock(x, surfaceY, z) === BlockId.LAVA) continue;
 
-      const score = surfaceY + (x === preferredX && z === preferredZ ? 100 : 0);
+      const openness = this.countOpenSpace(x, z, surfaceY);
+      if (openness < 40) continue;
+
+      const dist = Math.abs(x - preferredX) + Math.abs(z - preferredZ);
+      const score = openness * 5 - dist;
       if (!best || score > best.score) {
         best = { x, z, y: surfaceY + 1, score };
       }
@@ -320,10 +372,10 @@ export class World {
       return { x: best.x + 0.5, y: best.y, z: best.z + 0.5 };
     }
 
-    const fallbackY = this.getTopSolidBlockY(preferredX, preferredZ);
+    const surfaceY = this.getWalkableSurfaceY(preferredX, preferredZ);
     return {
       x: preferredX + 0.5,
-      y: Math.max(fallbackY + 1, 1),
+      y: Math.max(surfaceY + 1, 2),
       z: preferredZ + 0.5,
     };
   }

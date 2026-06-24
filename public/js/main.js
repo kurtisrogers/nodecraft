@@ -273,9 +273,7 @@ class Game {
       this.highlight.hide();
     }
 
-    if (Math.random() < 0.15) {
-      this.worldRenderer.update(this.player.position.x, this.player.position.z);
-    }
+    this.worldRenderer.update(this.player.position.x, this.player.position.z);
 
     this.renderer.render(this.scene, this.camera);
 

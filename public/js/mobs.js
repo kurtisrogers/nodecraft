@@ -264,7 +264,6 @@ export class MobManager {
   }
 
   update(dt, playerPos) {
-    this.dayTime += dt;
     if (this.authoritative) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {

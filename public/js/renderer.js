@@ -64,12 +64,39 @@ export class ChunkMesher {
     this.world = world;
   }
 
+  getNeighborBlock(chunk, lx, ly, lz) {
+    if (ly < 0 || ly >= WORLD_HEIGHT) return 0;
+
+    let chunkX = chunk.chunkX;
+    let chunkZ = chunk.chunkZ;
+    let nx = lx;
+    let nz = lz;
+
+    if (nx < 0) {
+      chunkX--;
+      nx += CHUNK_SIZE;
+    } else if (nx >= CHUNK_SIZE) {
+      chunkX++;
+      nx -= CHUNK_SIZE;
+    }
+
+    if (nz < 0) {
+      chunkZ--;
+      nz += CHUNK_SIZE;
+    } else if (nz >= CHUNK_SIZE) {
+      chunkZ++;
+      nz -= CHUNK_SIZE;
+    }
+
+    const neighbor = this.world.chunks.get(this.world.chunkKey(chunkX, chunkZ));
+    if (!neighbor) return 0;
+    return neighbor.getBlock(nx, ly, nz);
+  }
+
   buildChunkMesh(chunk) {
     const vertices = [];
     const normals = [];
     const colors = [];
-    const worldXBase = chunk.chunkX * CHUNK_SIZE;
-    const worldZBase = chunk.chunkZ * CHUNK_SIZE;
 
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let y = 0; y < WORLD_HEIGHT; y++) {
@@ -78,17 +105,7 @@ export class ChunkMesher {
           if (blockId === 0) continue;
 
           for (const { dir, face } of FACE_DIRECTIONS) {
-            const nx = x + dir[0];
-            const ny = y + dir[1];
-            const nz = z + dir[2];
-
-            let neighborId;
-            if (nx >= 0 && nx < CHUNK_SIZE && ny >= 0 && ny < WORLD_HEIGHT && nz >= 0 && nz < CHUNK_SIZE) {
-              neighborId = chunk.getBlock(nx, ny, nz);
-            } else {
-              neighborId = this.world.getBlock(worldXBase + nx, ny, worldZBase + nz);
-            }
-
+            const neighborId = this.getNeighborBlock(chunk, x + dir[0], y + dir[1], z + dir[2]);
             if (isTransparent(neighborId)) {
               addFace(vertices, normals, colors, x, y, z, face, blockId, dir);
             }
@@ -103,14 +120,19 @@ export class ChunkMesher {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.computeBoundingSphere();
+    geometry.computeBoundingBox();
 
     const material = new THREE.MeshLambertMaterial({
       vertexColors: true,
       side: THREE.FrontSide,
     });
 
+    const worldXBase = chunk.chunkX * CHUNK_SIZE;
+    const worldZBase = chunk.chunkZ * CHUNK_SIZE;
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(worldXBase, 0, worldZBase);
+    mesh.frustumCulled = false;
     return mesh;
   }
 }
@@ -169,6 +191,12 @@ export class WorldRenderer {
     const { chunkX, chunkZ } = this.world.worldToChunk(worldX, worldZ);
     const chunk = this.world.getChunk(chunkX, chunkZ);
     chunk.dirty = true;
+
+    const local = chunk.worldToLocal(worldX, 0, worldZ);
+    if (local.x === 0) this.world.getChunk(chunkX - 1, chunkZ).dirty = true;
+    if (local.x === CHUNK_SIZE - 1) this.world.getChunk(chunkX + 1, chunkZ).dirty = true;
+    if (local.z === 0) this.world.getChunk(chunkX, chunkZ - 1).dirty = true;
+    if (local.z === CHUNK_SIZE - 1) this.world.getChunk(chunkX, chunkZ + 1).dirty = true;
   }
 
   dispose() {

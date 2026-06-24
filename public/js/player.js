@@ -5,9 +5,9 @@ import { Inventory } from './inventory.js';
 import { isBlockItem } from './items.js';
 
 const GRAVITY = -28;
-const JUMP_VELOCITY = 9;
-const WALK_SPEED = 5;
-const SPRINT_SPEED = 9;
+const JUMP_VELOCITY = 10;
+const WALK_SPEED = 7;
+const SPRINT_SPEED = 12;
 const MOUSE_SENSITIVITY = 0.002;
 const PLAYER_HEIGHT = 1.7;
 const PLAYER_WIDTH = 0.6;
@@ -263,7 +263,7 @@ export class Player {
     const pz = Math.floor(this.position.z);
     let inLava = false;
 
-    for (let y = py; y <= py + 1; y++) {
+    for (let y = py; y < py + 2; y++) {
       if (isLava(this.world.getBlock(px, y, pz))) {
         inLava = true;
         break;
@@ -275,9 +275,7 @@ export class Player {
       return;
     }
 
-    this.velocity.y = Math.max(this.velocity.y, -2);
-    this.velocity.x *= 0.85;
-    this.velocity.z *= 0.85;
+    this.velocity.y = Math.max(this.velocity.y, -3);
 
     this.lavaDamageTimer += dt;
     if (this.lavaDamageTimer >= 0.5) {
