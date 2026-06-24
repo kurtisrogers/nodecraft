@@ -1,0 +1,19 @@
+{
+  "name": "nodecraft",
+  "version": "1.0.0",
+  "description": "A Minecraft-like voxel sandbox game built with Node.js and Three.js",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["minecraft", "voxel", "game", "threejs"],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
