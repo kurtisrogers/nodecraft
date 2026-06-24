@@ -174,8 +174,7 @@ export class World {
     const mod = this.modifications.get(this.modKey(worldX, worldY, worldZ));
     if (mod !== undefined) return mod;
     const { chunkX, chunkZ } = this.worldToChunk(worldX, worldZ);
-    const chunk = this.chunks.get(this.chunkKey(chunkX, chunkZ));
-    if (!chunk) return BlockId.AIR;
+    const chunk = this.getChunk(chunkX, chunkZ);
     const local = chunk.worldToLocal(worldX, worldY, worldZ);
     return chunk.getBlock(local.x, local.y, local.z);
   }
@@ -222,7 +221,57 @@ export class World {
     }
   }
 
+  getTopSolidBlockY(worldX, worldZ) {
+    this.getChunk(Math.floor(worldX / CHUNK_SIZE), Math.floor(worldZ / CHUNK_SIZE));
+    for (let y = WORLD_HEIGHT - 1; y >= 0; y--) {
+      if (isSolid(this.getBlock(worldX, y, worldZ))) return y;
+    }
+    return 0;
+  }
+
+  findSafeSpawn(preferredX = 0, preferredZ = 0) {
+    const candidates = [{ x: preferredX, z: preferredZ }];
+    for (let r = 1; r <= 48; r += 4) {
+      for (let a = 0; a < 8; a++) {
+        const angle = (a / 8) * Math.PI * 2;
+        candidates.push({
+          x: Math.round(preferredX + Math.cos(angle) * r),
+          z: Math.round(preferredZ + Math.sin(angle) * r),
+        });
+      }
+    }
+
+    let best = null;
+    for (const { x, z } of candidates) {
+      this.getChunk(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE));
+      const surfaceY = this.getTopSolidBlockY(x, z);
+      if (surfaceY <= 0) continue;
+
+      const headroom = this.getBlock(x, surfaceY + 1, z);
+      const headroom2 = this.getBlock(x, surfaceY + 2, z);
+      if (isSolid(headroom) || isSolid(headroom2)) continue;
+      if (surfaceY <= SEA_LEVEL) continue;
+
+      const score = surfaceY + (x === preferredX && z === preferredZ ? 100 : 0);
+      if (!best || score > best.score) {
+        best = { x, z, y: surfaceY + 1, score };
+      }
+    }
+
+    if (best) {
+      return { x: best.x + 0.5, y: best.y, z: best.z + 0.5 };
+    }
+
+    const fallbackY = this.getTopSolidBlockY(preferredX, preferredZ);
+    return {
+      x: preferredX + 0.5,
+      y: Math.max(fallbackY + 1, 1),
+      z: preferredZ + 0.5,
+    };
+  }
+
   getSpawnHeight(worldX, worldZ) {
-    return this.noise.terrainHeight(worldX, worldZ) + 2;
+    this.getChunk(Math.floor(worldX / CHUNK_SIZE), Math.floor(worldZ / CHUNK_SIZE));
+    return this.getTopSolidBlockY(worldX, worldZ) + 1;
   }
 }

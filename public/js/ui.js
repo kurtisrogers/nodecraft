@@ -8,11 +8,32 @@ export class GameUI {
     this.hotbarEl = document.getElementById('hotbar');
     this.inventoryPanel = document.getElementById('inventory-panel');
     this.craftingPanel = document.getElementById('crafting-panel');
+    this.menuOverlay = document.getElementById('menu-overlay');
+    this.closeBtn = document.getElementById('btn-close-menu');
     this.recipeList = document.getElementById('recipe-list');
     this.playerCountEl = document.getElementById('player-count');
     this.timeEl = document.getElementById('time-display');
     this.open = false;
     this.buildRecipeList();
+    this.setupMenuClose();
+  }
+
+  setupMenuClose() {
+    this.closeBtn?.addEventListener('click', () => this.closeInventory());
+    this.closeBtn?.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      this.closeInventory();
+    }, { passive: false });
+
+    this.menuOverlay?.addEventListener('click', () => this.closeInventory());
+    this.menuOverlay?.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      this.closeInventory();
+    }, { passive: false });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.open) this.closeInventory();
+    });
   }
 
   buildRecipeList() {
@@ -24,6 +45,10 @@ export class GameUI {
       btn.textContent = `${recipe.name} → ${recipe.result.count}x`;
       btn.dataset.recipeId = recipe.id;
       btn.addEventListener('click', () => this.craftRecipe(recipe.id));
+      btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        this.craftRecipe(recipe.id);
+      }, { passive: false });
       this.recipeList.appendChild(btn);
     }
   }
@@ -48,22 +73,29 @@ export class GameUI {
   }
 
   toggleInventory() {
-    this.open = !this.open;
-    this.inventoryPanel?.classList.toggle('open', this.open);
-    this.craftingPanel?.classList.toggle('open', this.open);
-    if (this.open) {
-      if (!document.body.classList.contains('mobile')) {
-        document.exitPointerLock();
-      }
-      this.refreshInventory();
-      this.updateRecipeButtons();
+    if (this.open) this.closeInventory();
+    else this.openInventory();
+  }
+
+  openInventory() {
+    this.open = true;
+    document.body.classList.add('menu-open');
+    this.inventoryPanel?.classList.add('open');
+    this.craftingPanel?.classList.add('open');
+    this.menuOverlay?.classList.add('open');
+    if (!document.body.classList.contains('mobile')) {
+      document.exitPointerLock();
     }
+    this.refreshInventory();
+    this.updateRecipeButtons();
   }
 
   closeInventory() {
     this.open = false;
+    document.body.classList.remove('menu-open');
     this.inventoryPanel?.classList.remove('open');
     this.craftingPanel?.classList.remove('open');
+    this.menuOverlay?.classList.remove('open');
   }
 
   isOpen() {
@@ -87,12 +119,17 @@ export class GameUI {
       `;
     }
 
-  if (isHotbar) {
-      el.addEventListener('click', () => {
+    if (isHotbar) {
+      const select = () => {
         this.game.player.hotbarIndex = index;
         this.game.player.updateSelectedBlock();
         this.refreshHotbar();
-      });
+      };
+      el.addEventListener('click', select);
+      el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        select();
+      }, { passive: false });
     }
 
     return el;
@@ -139,7 +176,6 @@ export class GameUI {
       this.timeEl.classList.toggle('night', isNight);
     }
     if (this.game.scene) {
-      const cycle = (dayTime % 120) / 120;
       const skyColor = isNight ? 0x0a0a20 : 0x87ceeb;
       this.game.renderer.setClearColor(skyColor);
       this.game.scene.fog.color.setHex(skyColor);

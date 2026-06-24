@@ -67,14 +67,17 @@
     </div>
   </div>
 
-  <div id="inventory-panel">
+  <div id="menu-overlay"></div>
+
+  <div id="inventory-panel" class="menu-panel">
+    <button id="btn-close-menu" class="menu-close-btn" aria-label="Close">✕ Close</button>
     <h2>Inventory</h2>
     <div id="inventory-grid"></div>
     <p class="panel-hint desktop-hint">Press <kbd>E</kbd> to close</p>
-    <p class="panel-hint mobile-hint hidden">Tap 🎒 to close</p>
+    <p class="panel-hint mobile-hint hidden">Tap Close or 🎒 to exit</p>
   </div>
 
-  <div id="crafting-panel">
+  <div id="crafting-panel" class="menu-panel">
     <h2>Crafting</h2>
     <div id="recipe-list"></div>
     <div class="recipe-hints">

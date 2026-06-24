@@ -38,11 +38,10 @@ export class Player {
   }
 
   spawn() {
-    const spawnX = 0;
-    const spawnZ = 0;
-    const height = this.world.getSpawnHeight(spawnX, spawnZ);
-    this.position.set(spawnX + 0.5, height, spawnZ + 0.5);
+    const spawn = this.world.findSafeSpawn(0, 0);
+    this.position.set(spawn.x, spawn.y, spawn.z);
     this.velocity.set(0, 0, 0);
+    this.onGround = false;
     this.updateCamera();
   }
 
@@ -242,6 +241,11 @@ export class Player {
     if (this.onGround && (this.keys['Space'] || this.touchJump)) {
       this.velocity.y = JUMP_VELOCITY;
       this.onGround = false;
+    }
+
+    if (this.position.y < -10) {
+      this.spawn();
+      return;
     }
 
     this.velocity.y += GRAVITY * dt;

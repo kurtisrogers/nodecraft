@@ -58,6 +58,9 @@ class Game {
     this.ui = new GameUI(this);
 
     this.giveStarterItems();
+
+    this.world.loadChunksAround(0, 0);
+    this.worldRenderer.update(0, 0);
     this.player.spawn();
     this.player.updateSelectedBlock();
     this.ui.refreshHotbar();
@@ -93,6 +96,8 @@ class Game {
     this.mobManager.dayTime = dayTime ?? 0;
     this.remotePlayers.sync(players, playerId);
     this.ui.setPlayerCount(players.length);
+    this.world.loadChunksAround(0, 0);
+    this.worldRenderer.update(0, 0);
     this.player.spawn();
     this.worldRenderer.update(this.player.position.x, this.player.position.z);
   }
@@ -256,7 +261,7 @@ class Game {
       this.highlight.hide();
     }
 
-    if (Math.random() < 0.05) {
+    if (Math.random() < 0.15) {
       this.worldRenderer.update(this.player.position.x, this.player.position.z);
     }
 
