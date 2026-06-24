@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nodecraft — Minecraft in Node.js</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <div id="loading">
+    <div class="loading-content">
+      <h1>Nodecraft</h1>
+      <p>Generating world...</p>
+      <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div class="crosshair"></div>
+    <div id="hud">
+      <div id="fps">-- FPS</div>
+      <div id="position">0, 0, 0</div>
+      <div id="player-count">Loading...</div>
+      <div id="time-display">Day</div>
+    </div>
+    <div id="hotbar"></div>
+    <div id="instructions">
+      <p>Click to play</p>
+      <p><kbd>WASD</kbd> Move · <kbd>Space</kbd> Jump · <kbd>Shift</kbd> Sprint</p>
+      <p><kbd>LMB</kbd> Break/Attack · <kbd>RMB</kbd> Place · <kbd>E</kbd> Inventory</p>
+      <p><kbd>1-9</kbd> Hotbar · Multiplayer when running <code>npm start</code></p>
+    </div>
+  </div>
+
+  <div id="inventory-panel">
+    <h2>Inventory</h2>
+    <div id="inventory-grid"></div>
+    <p class="panel-hint">Press <kbd>E</kbd> to close</p>
+  </div>
+
+  <div id="crafting-panel">
+    <h2>Crafting</h2>
+    <div id="recipe-list"></div>
+    <div class="recipe-hints">
+      <p>Wood → 4 Planks</p>
+      <p>2 Planks → 4 Sticks</p>
+      <p>2×2 Planks → Crafting Table</p>
+      <p>2×2 Sand → 4 Glass</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

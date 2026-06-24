@@ -1,0 +1,201 @@
+import * as THREE from 'three';
+import { getBlockColor, isTransparent } from './blocks.js';
+import { CHUNK_SIZE, WORLD_HEIGHT } from './world.js';
+
+const FACE_DIRECTIONS = [
+  { dir: [0, 1, 0], face: 'top' },
+  { dir: [0, -1, 0], face: 'bottom' },
+  { dir: [1, 0, 0], face: 'side' },
+  { dir: [-1, 0, 0], face: 'side' },
+  { dir: [0, 0, 1], face: 'side' },
+  { dir: [0, 0, -1], face: 'side' },
+];
+
+function addFace(vertices, normals, colors, x, y, z, face, blockId, dir) {
+  const color = new THREE.Color(getBlockColor(blockId, face));
+  const shade = face === 'top' ? 1.0 : face === 'bottom' ? 0.6 : 0.8;
+  color.multiplyScalar(shade);
+
+  const positions = {
+    top: [
+      [x, y + 1, z], [x + 1, y + 1, z], [x + 1, y + 1, z + 1], [x, y + 1, z + 1],
+    ],
+    bottom: [
+      [x, y, z + 1], [x + 1, y, z + 1], [x + 1, y, z], [x, y, z],
+    ],
+    '+x': [
+      [x + 1, y, z], [x + 1, y, z + 1], [x + 1, y + 1, z + 1], [x + 1, y + 1, z],
+    ],
+    '-x': [
+      [x, y, z + 1], [x, y, z], [x, y + 1, z], [x, y + 1, z + 1],
+    ],
+    '+z': [
+      [x + 1, y, z + 1], [x, y, z + 1], [x, y + 1, z + 1], [x + 1, y + 1, z + 1],
+    ],
+    '-z': [
+      [x, y, z], [x + 1, y, z], [x + 1, y + 1, z], [x, y + 1, z],
+    ],
+  };
+
+  let key;
+  if (face === 'top') key = 'top';
+  else if (face === 'bottom') key = 'bottom';
+  else if (dir[0] === 1) key = '+x';
+  else if (dir[0] === -1) key = '-x';
+  else if (dir[2] === 1) key = '+z';
+  else key = '-z';
+
+  const verts = positions[key];
+  const normal = new THREE.Vector3(...dir);
+
+  const indices = [0, 1, 2, 0, 2, 3];
+  for (const i of indices) {
+    vertices.push(...verts[i]);
+    normals.push(normal.x, normal.y, normal.z);
+    colors.push(color.r, color.g, color.b);
+  }
+}
+
+export class ChunkMesher {
+  constructor(world) {
+    this.world = world;
+  }
+
+  buildChunkMesh(chunk) {
+    const vertices = [];
+    const normals = [];
+    const colors = [];
+    const worldXBase = chunk.chunkX * CHUNK_SIZE;
+    const worldZBase = chunk.chunkZ * CHUNK_SIZE;
+
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      for (let y = 0; y < WORLD_HEIGHT; y++) {
+        for (let z = 0; z < CHUNK_SIZE; z++) {
+          const blockId = chunk.getBlock(x, y, z);
+          if (blockId === 0) continue;
+
+          for (const { dir, face } of FACE_DIRECTIONS) {
+            const nx = x + dir[0];
+            const ny = y + dir[1];
+            const nz = z + dir[2];
+
+            let neighborId;
+            if (nx >= 0 && nx < CHUNK_SIZE && ny >= 0 && ny < WORLD_HEIGHT && nz >= 0 && nz < CHUNK_SIZE) {
+              neighborId = chunk.getBlock(nx, ny, nz);
+            } else {
+              neighborId = this.world.getBlock(worldXBase + nx, ny, worldZBase + nz);
+            }
+
+            if (isTransparent(neighborId)) {
+              addFace(vertices, normals, colors, x, y, z, face, blockId, dir);
+            }
+          }
+        }
+      }
+    }
+
+    if (vertices.length === 0) return null;
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    const material = new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      side: THREE.FrontSide,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(worldXBase, 0, worldZBase);
+    return mesh;
+  }
+}
+
+export class WorldRenderer {
+  constructor(scene, world) {
+    this.scene = scene;
+    this.world = world;
+    this.mesher = new ChunkMesher(world);
+    this.chunkMeshes = new Map();
+  }
+
+  update(playerX, playerZ) {
+    const chunks = this.world.loadChunksAround(playerX, playerZ);
+    this.world.unloadDistantChunks(playerX, playerZ);
+
+    const activeKeys = new Set();
+
+    for (const chunk of chunks) {
+      const key = `${chunk.chunkX},${chunk.chunkZ}`;
+      activeKeys.add(key);
+
+      if (chunk.dirty || !this.chunkMeshes.has(key)) {
+        this.removeChunkMesh(key);
+        const mesh = this.mesher.buildChunkMesh(chunk);
+        if (mesh) {
+          this.scene.add(mesh);
+          this.chunkMeshes.set(key, mesh);
+        }
+        chunk.dirty = false;
+        chunk.mesh = mesh;
+      }
+    }
+
+    for (const [key, mesh] of this.chunkMeshes) {
+      if (!activeKeys.has(key)) {
+        this.scene.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+        this.chunkMeshes.delete(key);
+      }
+    }
+  }
+
+  removeChunkMesh(key) {
+    const existing = this.chunkMeshes.get(key);
+    if (existing) {
+      this.scene.remove(existing);
+      existing.geometry.dispose();
+      existing.material.dispose();
+      this.chunkMeshes.delete(key);
+    }
+  }
+
+  rebuildChunkAt(worldX, worldZ) {
+    const { chunkX, chunkZ } = this.world.worldToChunk(worldX, worldZ);
+    const chunk = this.world.getChunk(chunkX, chunkZ);
+    chunk.dirty = true;
+  }
+
+  dispose() {
+    for (const [, mesh] of this.chunkMeshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    }
+    this.chunkMeshes.clear();
+  }
+}
+
+export class HighlightBox {
+  constructor(scene) {
+    const geometry = new THREE.BoxGeometry(1.005, 1.005, 1.005);
+    const edges = new THREE.EdgesGeometry(geometry);
+    this.mesh = new THREE.LineSegments(
+      edges,
+      new THREE.LineBasicMaterial({ color: 0x000000 })
+    );
+    this.mesh.visible = false;
+    scene.add(this.mesh);
+  }
+
+  show(x, y, z) {
+    this.mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+    this.mesh.visible = true;
+  }
+
+  hide() {
+    this.mesh.visible = false;
+  }
+}
