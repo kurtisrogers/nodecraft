@@ -31,6 +31,10 @@ export class Player {
     this.health = 20;
     this.maxHealth = 20;
     this.attackCooldown = 0;
+    this.mobileActive = false;
+    this.touchMove = { x: 0, z: 0 };
+    this.touchJump = false;
+    this.touchSprint = false;
   }
 
   spawn() {
@@ -70,6 +74,7 @@ export class Player {
     });
 
     domElement.addEventListener('click', () => {
+      if (document.body.classList.contains('mobile')) return;
       if (!this.pointerLocked && !this.onInventoryOpen?.()) {
         domElement.requestPointerLock();
       }
@@ -94,6 +99,16 @@ export class Player {
       this.hotbarIndex = (this.hotbarIndex + (e.deltaY > 0 ? 1 : -1) + 9) % 9;
       this.updateSelectedBlock();
     });
+  }
+
+  addLookDelta(dx, dy) {
+    this.yaw += dx;
+    this.pitch += dy;
+    this.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.pitch));
+  }
+
+  isControlling() {
+    return this.pointerLocked || this.mobileActive;
   }
 
   updateSelectedBlock() {
@@ -196,12 +211,13 @@ export class Player {
   update(dt) {
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
 
-    if (!this.pointerLocked) {
+    if (!this.isControlling()) {
       this.updateCamera();
       return;
     }
 
-    const speed = this.keys['ShiftLeft'] || this.keys['ShiftRight'] ? SPRINT_SPEED : WALK_SPEED;
+    const sprint = this.keys['ShiftLeft'] || this.keys['ShiftRight'] || this.touchSprint;
+    const speed = sprint ? SPRINT_SPEED : WALK_SPEED;
     const forward = this.getForward();
     const right = this.getRight();
     const move = new THREE.Vector3();
@@ -211,6 +227,11 @@ export class Player {
     if (this.keys['KeyA']) move.sub(right);
     if (this.keys['KeyD']) move.add(right);
 
+    if (this.touchMove.x !== 0 || this.touchMove.z !== 0) {
+      move.add(forward.clone().multiplyScalar(-this.touchMove.z));
+      move.add(right.clone().multiplyScalar(this.touchMove.x));
+    }
+
     if (move.length() > 0) {
       move.normalize().multiplyScalar(speed * dt);
     }
@@ -218,7 +239,7 @@ export class Player {
     this.velocity.x = move.x;
     this.velocity.z = move.z;
 
-    if (this.onGround && this.keys['Space']) {
+    if (this.onGround && (this.keys['Space'] || this.touchJump)) {
       this.velocity.y = JUMP_VELOCITY;
       this.onGround = false;
     }

@@ -52,7 +52,9 @@ export class GameUI {
     this.inventoryPanel?.classList.toggle('open', this.open);
     this.craftingPanel?.classList.toggle('open', this.open);
     if (this.open) {
-      document.exitPointerLock();
+      if (!document.body.classList.contains('mobile')) {
+        document.exitPointerLock();
+      }
       this.refreshInventory();
       this.updateRecipeButtons();
     }
@@ -62,6 +64,10 @@ export class GameUI {
     this.open = false;
     this.inventoryPanel?.classList.remove('open');
     this.craftingPanel?.classList.remove('open');
+  }
+
+  isOpen() {
+    return this.open;
   }
 
   getItemStyle(itemId) {
