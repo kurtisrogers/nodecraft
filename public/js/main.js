@@ -65,7 +65,7 @@ class Game {
 
     this.setupNetwork();
 
-    if (isMobileDevice()) {
+    if (document.getElementById('mobile-controls') && isMobileDevice()) {
       this.touchControls = new TouchControls(this.player, this);
       this.touchControls.init();
     }

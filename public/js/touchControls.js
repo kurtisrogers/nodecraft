@@ -16,12 +16,22 @@ export class TouchControls {
   }
 
   init() {
+    if (!this.container || !this.startBtn) {
+      console.warn('Nodecraft: mobile controls markup not found');
+      return;
+    }
+
     document.body.classList.add('mobile');
     this.container.classList.remove('hidden');
     document.getElementById('desktop-instructions')?.classList.add('hidden');
     document.getElementById('mobile-instructions')?.classList.remove('hidden');
 
-    this.startBtn.addEventListener('click', () => this.startGame());
+    const start = (e) => {
+      e?.preventDefault();
+      this.startGame();
+    };
+    this.startBtn.addEventListener('click', start);
+    this.startBtn.addEventListener('touchend', start, { passive: false });
     this.setupJoystick();
     this.setupLookZone();
     this.setupButtons();

@@ -340,6 +340,20 @@ body.playing #instructions {
   pointer-events: none;
 }
 
+@media (pointer: coarse), (max-width: 900px) {
+  #mobile-controls.hidden {
+    display: block !important;
+  }
+
+  body:not(.mobile) #desktop-instructions {
+    display: none;
+  }
+
+  body:not(.mobile) #mobile-instructions {
+    display: block !important;
+  }
+}
+
 .mobile-start-btn {
   position: absolute;
   top: 50%;
