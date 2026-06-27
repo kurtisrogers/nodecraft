@@ -215,25 +215,51 @@
 
       document.body.classList.add('mobile');
 
+      let wasmApi = null;
+      let pendingStart = false;
+      let gameplayControlsReady = false;
+
       function getWasmApi() {
-        return window.wasmBindings;
+        return wasmApi || window.wasmBindings || null;
       }
 
-      let mobileControlsReady = false;
+      function callWasm(name, ...args) {
+        const api = getWasmApi();
+        if (!api || typeof api[name] !== 'function') return false;
+        api[name](...args);
+        return true;
+      }
 
-      function initMobileControls(w) {
-        if (mobileControlsReady) return;
-        if (!w || typeof w.nc_mobile_start !== 'function') return;
-        mobileControlsReady = true;
+      function startGame(e) {
+        e?.preventDefault();
+        e?.stopPropagation();
+        if (document.body.classList.contains('playing')) return;
+        document.body.classList.add('playing');
+        pendingStart = true;
+        callWasm('nc_set_mobile', true);
+        callWasm('nc_mobile_start');
+      }
 
+      const startBtn = document.getElementById('mobile-start');
+      if (startBtn) {
+        startBtn.addEventListener('touchstart', startGame, { passive: false });
+        startBtn.addEventListener('click', startGame);
+      }
+
+      function initGameplayControls(w) {
+        if (gameplayControlsReady) return;
+        gameplayControlsReady = true;
+        wasmApi = w;
         w.nc_set_mobile(true);
+        if (pendingStart) {
+          w.nc_mobile_start();
+        }
+
         const joystick = document.getElementById('joystick');
         const knob = document.getElementById('joystick-knob');
-        const startBtn = document.getElementById('mobile-start');
-        if (!joystick || !knob || !startBtn) return;
+        if (!joystick || !knob) return;
 
-        let enabled = false;
-        let started = false;
+        let enabled = pendingStart;
         let joystickTouchId = null;
         let lookTouchId = null;
         let joystickCenter = { x: 0, y: 0 };
@@ -249,20 +275,6 @@
           w.nc_mobile_set_move(0, 0);
           knob.style.transform = 'translate(-50%, -50%)';
         }
-
-        function startGame(e) {
-          e?.preventDefault();
-          e?.stopPropagation();
-          if (started) return;
-          started = true;
-          enabled = true;
-          document.body.classList.add('playing');
-          w.nc_mobile_start();
-        }
-
-        startBtn.addEventListener('touchstart', startGame, { passive: false });
-        startBtn.addEventListener('touchend', startGame, { passive: false });
-        startBtn.addEventListener('click', startGame);
 
         function updateJoystick(clientX, clientY) {
           let dx = clientX - joystickCenter.x;
@@ -404,25 +416,27 @@
           slot.classList.add('selected');
           w.nc_mobile_select_hotbar(index);
         }, { passive: false });
+
+        // If the player tapped Play before wasm finished booting, enable controls now.
+        enabled = document.body.classList.contains('playing');
       }
 
-      const existingApi = getWasmApi();
-      if (existingApi && typeof existingApi.nc_mobile_start === 'function') {
-        initMobileControls(existingApi);
-      } else {
-        window.addEventListener('TrunkApplicationStarted', () => {
-          initMobileControls(getWasmApi());
-        });
-        // Fallback if the Trunk event was already dispatched.
-        (function waitForWasmExports() {
-          const api = getWasmApi();
-          if (api && typeof api.nc_mobile_start === 'function') {
-            initMobileControls(api);
-            return;
-          }
-          requestAnimationFrame(waitForWasmExports);
-        })();
+      function tryConnectWasm() {
+        const api = getWasmApi();
+        if (!api || typeof api.nc_mobile_start !== 'function') return false;
+        initGameplayControls(api);
+        return true;
       }
+
+      window.addEventListener('TrunkApplicationStarted', () => {
+        tryConnectWasm();
+      });
+
+      (function waitForWasmExports() {
+        if (!tryConnectWasm()) {
+          requestAnimationFrame(waitForWasmExports);
+        }
+      })();
     })();
   </script>
 </body>

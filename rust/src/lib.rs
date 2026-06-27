@@ -167,6 +167,9 @@ mod wasm_entry {
     pub fn wasm_start() {
         console_error_panic_hook::set_once();
         hide_loading_overlay();
-        super::run();
+        // Defer Bevy so Trunk can finish init and expose window.wasmBindings.
+        wasm_bindgen_futures::spawn_local(async {
+            super::run();
+        });
     }
 }
