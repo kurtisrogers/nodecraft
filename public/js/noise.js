@@ -98,9 +98,61 @@ export class NoiseGenerator {
     }
 
     const landFactor = Math.min(1, (cont + 0.08) / 0.45);
-    const hills = this.fbm(worldX * 0.016, worldZ * 0.016, 5, 0.5, 2) * 24;
-    const ridges = this.fbm(worldX * 0.04, worldZ * 0.04, 3, 0.42, 2) * 9;
-    return Math.floor(34 + landFactor * 18 + hills + ridges);
+    const gentleHills = this.fbm(worldX * 0.006, worldZ * 0.006, 4, 0.5, 2) * 6;
+    const micro = this.fbm(worldX * 0.03, worldZ * 0.03, 2, 0.4, 2) * 1.5;
+    let height = 34 + landFactor * 10 + gentleHills + micro;
+
+    const settleStrength = this.settlementAt(worldX, worldZ);
+    if (settleStrength > 0.2) {
+      const flatTarget = 36 + gentleHills * 0.4;
+      height = height * (1 - settleStrength * 0.85) + flatTarget * (settleStrength * 0.85);
+    }
+
+    return Math.floor(Math.max(28, Math.min(48, height)));
+  }
+
+  settlementAt(worldX, worldZ) {
+    const grid = 192;
+    const cellX = Math.floor(worldX / grid);
+    const cellZ = Math.floor(worldZ / grid);
+    const cell = this.fbm(cellX * 0.85 + 500, cellZ * 0.85 + 500, 2);
+    if (cell < 0.15) return 0;
+
+    const lx = ((worldX % grid) + grid) % grid;
+    const lz = ((worldZ % grid) + grid) % grid;
+    const dx = Math.min(lx, grid - lx) / (grid * 0.5);
+    const dz = Math.min(lz, grid - lz) / (grid * 0.5);
+    const edge = Math.min(dx, dz);
+    return Math.max(0, Math.min(1, edge * ((cell - 0.15) / 0.35)));
+  }
+
+  settlementCenterNear(worldX, worldZ, searchRadius = 256) {
+    const grid = 192;
+    const cx0 = Math.floor(worldX / grid);
+    const cz0 = Math.floor(worldZ / grid);
+    let best = null;
+    let bestDist = Infinity;
+
+    for (let dcx = -1; dcx <= 1; dcx++) {
+      for (let dcz = -1; dcz <= 1; dcz++) {
+        const cellX = cx0 + dcx;
+        const cellZ = cz0 + dcz;
+        const cell = this.fbm(cellX * 0.85 + 500, cellZ * 0.85 + 500, 2);
+        if (cell < 0.15) continue;
+        const centerX = cellX * grid + grid / 2;
+        const centerZ = cellZ * grid + grid / 2;
+        const dist = Math.hypot(centerX - worldX, centerZ - worldZ);
+        if (dist < bestDist && dist <= searchRadius) {
+          bestDist = dist;
+          best = { x: centerX, z: centerZ, strength: cell };
+        }
+      }
+    }
+    return best;
+  }
+
+  isInSettlement(worldX, worldZ) {
+    return this.settlementAt(worldX, worldZ) > 0.35;
   }
 
   biome(worldX, worldZ) {
@@ -139,15 +191,16 @@ export class NoiseGenerator {
 
   shouldPlaceTree(worldX, worldZ) {
     if (!this.isLand(worldX, worldZ)) return false;
+    if (this.isInSettlement(worldX, worldZ)) return false;
     const biome = this.biome(worldX, worldZ);
     const isDesert = biome.temperature > 0.3 && biome.moisture < -0.1;
     const isSnow = biome.temperature < -0.3;
     if (isDesert || isSnow) return false;
 
     const roll = this.roll(worldX, worldZ, 7);
-    if (this.isForest(worldX, worldZ)) return roll < 0.22;
-    if (this.isMeadow(worldX, worldZ)) return roll < 0.1;
-    return roll < 0.05;
+    if (this.isForest(worldX, worldZ)) return roll < 0.18;
+    if (this.isMeadow(worldX, worldZ)) return roll < 0.08;
+    return roll < 0.04;
   }
 
   shouldPlaceBush(worldX, worldZ) {

@@ -1,6 +1,7 @@
 import { BlockId, isSolid, isTransparent } from './blocks.js';
 import { NoiseGenerator } from './noise.js';
 import { getRenderSettings } from './config.js';
+import { placeSettlement } from './structures.js';
 
 export const CHUNK_SIZE = 16;
 export const WORLD_HEIGHT = 64;
@@ -87,7 +88,8 @@ export class Chunk {
         if (surfaceY < 1) continue;
 
         if (isLand && height > SEA_LEVEL + 1 && !isDesert && !isSnow) {
-          if (this.noise.shouldPlaceTree(worldX, worldZ)) {
+          const inVillage = this.noise.isInSettlement(worldX, worldZ);
+          if (!inVillage && this.noise.shouldPlaceTree(worldX, worldZ)) {
             const clear = this.countTreeClearance(x, z, surfaceY);
             if (clear >= 18) {
               this.generateTree(x, surfaceY, z);
@@ -287,6 +289,50 @@ export class World {
     this.chunks = new Map();
     this.renderDistance = renderSettings.renderDistance;
     this.modifications = new Map();
+    this.placedSettlements = new Set();
+  }
+
+  ensureSettlementsNear(worldX, worldZ, radius = 256) {
+    const grid = 192;
+    const minCellX = Math.floor((worldX - radius) / grid);
+    const maxCellX = Math.floor((worldX + radius) / grid);
+    const minCellZ = Math.floor((worldZ - radius) / grid);
+    const maxCellZ = Math.floor((worldZ + radius) / grid);
+
+    for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+      for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ++) {
+        const key = `${cellX},${cellZ}`;
+        if (this.placedSettlements.has(key)) continue;
+
+        const cell = this.noise.fbm(cellX * 0.85 + 500, cellZ * 0.85 + 500, 2);
+        if (cell < 0.15) continue;
+
+        const centerX = cellX * grid + grid / 2;
+        const centerZ = cellZ * grid + grid / 2;
+        if (Math.hypot(centerX - worldX, centerZ - worldZ) > radius) continue;
+        if (!this.noise.isLand(centerX, centerZ)) continue;
+
+        const surfaceY = this.noise.terrainHeight(centerX, centerZ);
+        if (surfaceY <= SEA_LEVEL + 1) continue;
+
+        this.loadChunksAround(centerX, centerZ);
+        placeSettlement(this, centerX, centerZ, surfaceY);
+        this.placedSettlements.add(key);
+        this.markSettlementChunksDirty(centerX, centerZ);
+      }
+    }
+  }
+
+  markSettlementChunksDirty(centerX, centerZ) {
+    const radius = 2;
+    const centerChunkX = Math.floor(centerX / CHUNK_SIZE);
+    const centerChunkZ = Math.floor(centerZ / CHUNK_SIZE);
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        const chunk = this.chunks.get(this.chunkKey(centerChunkX + dx, centerChunkZ + dz));
+        if (chunk) chunk.dirty = true;
+      }
+    }
   }
 
   modKey(x, y, z) {
@@ -483,8 +529,19 @@ export class World {
   }
 
   findSafeSpawn(preferredX = 0, preferredZ = 0) {
+    const settlement = this.noise.settlementCenterNear(preferredX, preferredZ, 320);
+    if (settlement) {
+      this.ensureSettlementsNear(settlement.x, settlement.z, 64);
+      const villageSpawn = this.findSpawnInArea(settlement.x, settlement.z, 18);
+      if (villageSpawn) return villageSpawn;
+    }
+
+    return this.findSpawnInArea(preferredX, preferredZ, 40);
+  }
+
+  findSpawnInArea(preferredX, preferredZ, maxRadius) {
     const candidates = [{ x: preferredX, z: preferredZ }];
-    for (let r = 2; r <= 40; r += 2) {
+    for (let r = 2; r <= maxRadius; r += 2) {
       for (let a = 0; a < 12; a++) {
         const angle = (a / 12) * Math.PI * 2;
         candidates.push({
@@ -509,7 +566,8 @@ export class World {
       if (!this.isVolumeClear(x + 0.5, spawnY, z + 0.5)) continue;
 
       const dist = Math.abs(x - preferredX) + Math.abs(z - preferredZ);
-      const score = openness * 5 - dist;
+      const villageBonus = this.noise.isInSettlement(x, z) ? 200 : 0;
+      const score = openness * 5 - dist + villageBonus;
       if (!best || score > best.score) {
         best = { x, z, y: spawnY, score };
       }
