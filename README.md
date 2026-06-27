@@ -1,23 +1,16 @@
 # Nodecraft
 
-**[Play the demo →](https://kurtisrogers.github.io/nodecraft/)**
+**[Play the browser demo →](https://kurtisrogers.github.io/nodecraft/)**
 
-A Minecraft-like voxel sandbox built with **Rust + Bevy** — native desktop and WASM browser builds.
+A Minecraft-like voxel sandbox built with **Rust + Bevy** — play in the browser (WASM) or run the native desktop build for best performance.
 
-![Nodecraft](https://img.shields.io/badge/rust-stable-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Rust](https://img.shields.io/badge/rust-stable-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
-## Quick Start
-
-### Desktop (best performance)
-
-```bash
-cd rust
-cargo run --release
-```
+## Quick start
 
 ### Browser (WASM)
 
-Every push to `main` deploys the WASM build to GitHub Pages automatically.
+The live demo at [kurtisrogers.github.io/nodecraft](https://kurtisrogers.github.io/nodecraft/) is built automatically on every push to `main`.
 
 Local dev:
 
@@ -30,22 +23,22 @@ env -u NO_COLOR trunk serve --no-default-features
 
 Open http://127.0.0.1:8080
 
-See [`rust/README.md`](rust/README.md) for system dependencies and the optional multiplayer server.
+### Desktop (native — best performance)
+
+```bash
+cd rust
+cargo run --release
+```
+
+See [`rust/README.md`](rust/README.md) for Linux system dependencies and the optional multiplayer server.
 
 ## Features
 
-### World & Building
 - Procedural terrain with islands, biomes, caves, and lava
 - Villages with wooden houses, doors, and wheat farms
-- Break blocks (LMB) and place blocks (RMB)
-- 19 block types
-
-### Mobs
-- Pigs, cows, sheep, chickens — wander during the day
-- Zombies — hostile at night
-
-### Inventory
-- 36-slot inventory with hotbar (press `E`, keys `1-9`)
+- Mobs: pigs, cows, sheep, chickens, and zombies (hostile at night)
+- Break and place blocks, 36-slot inventory with hotbar
+- Day/night cycle
 
 ## Controls
 
@@ -61,7 +54,7 @@ See [`rust/README.md`](rust/README.md) for system dependencies and the optional 
 | `E` | Inventory |
 | `1-9` | Hotbar |
 
-## Tech Stack
+## Tech stack
 
 - **Rust + Bevy** — game client (native + WASM)
 - **Trunk** — WASM build for GitHub Pages
@@ -71,12 +64,13 @@ See [`rust/README.md`](rust/README.md) for system dependencies and the optional 
 
 ```
 rust/
-  src/lib.rs           # Game (native + WASM)
-  src/main.rs          # Desktop entry
+  src/lib.rs           # Game entry (native + WASM)
+  src/main.rs          # Desktop binary
   src/world.rs         # Terrain, chunks, villages
   src/mobs.rs          # Mob AI
-  src/bin/server.rs    # Multiplayer server
+  src/bin/server.rs    # Optional multiplayer server
   index.html           # WASM shell
+  Trunk.toml           # WASM build config
 ```
 
 ## License

@@ -1,6 +1,6 @@
 # Nodecraft (Rust)
 
-Native **Rust + Bevy** client, plus a **WASM build** deployed to GitHub Pages.
+Rust + Bevy client with native desktop and WASM browser builds.
 
 ## Requirements
 
@@ -12,19 +12,17 @@ sudo apt install libasound2-dev libudev-dev libxkbcommon-dev \
   libwayland-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev pkg-config
 ```
 
-## Native desktop (best performance)
+## Native desktop
 
 ```bash
-cd rust
 cargo run --release
 ```
 
-## Web / WASM (local)
+## Browser / WASM
 
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install trunk --locked
-cd rust
 env -u NO_COLOR trunk serve --no-default-features
 ```
 
@@ -32,16 +30,17 @@ Open http://127.0.0.1:8080
 
 ## GitHub Pages
 
-Every push to `main` builds the Rust WASM demo via GitHub Actions and deploys it to:
+Every push to `main` builds the WASM demo and deploys it to:
 
 **https://kurtisrogers.github.io/nodecraft/**
 
-## Multiplayer server
+## Multiplayer server (optional)
 
 ```bash
-cd rust
 cargo run --release --bin nodecraft-server --features server --no-default-features
 ```
+
+Listens on port 3000. The Rust client does not connect to it yet — server is kept for future networking work.
 
 ## Controls
 
@@ -60,7 +59,7 @@ cargo run --release --bin nodecraft-server --features server --no-default-featur
 ## Features
 
 - Procedural terrain, caves, lava, villages (houses + wheat farms)
-- Mobs: pigs, cows, sheep, chickens, zombies (night hostile)
+- Mobs: pigs, cows, sheep, chickens, zombies (hostile at night)
 - Day/night cycle
 - Block inventory + hotbar
 - Chunk meshing with Y-range optimization
