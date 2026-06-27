@@ -11,6 +11,9 @@ const FACE_DIRECTIONS = [
   { dir: [0, 0, -1], face: 'side' },
 ];
 
+const REMESH_BUDGET_DESKTOP = 4;
+const REMESH_BUDGET_MOBILE = 2;
+
 function addFace(vertices, normals, colors, x, y, z, face, blockId, dir) {
   const color = new THREE.Color(getBlockColor(blockId, face));
   const shade = face === 'top' ? 1.0 : face === 'bottom' ? 0.6 : 0.8;
@@ -93,7 +96,7 @@ export class ChunkMesher {
     return this.world.peekBlock(worldX, ly, worldZ);
   }
 
-  buildChunkMesh(chunk) {
+  buildChunkMesh(chunk, material) {
     const vertices = [];
     const normals = [];
     const colors = [];
@@ -101,9 +104,7 @@ export class ChunkMesher {
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let y = 0; y < WORLD_HEIGHT; y++) {
         for (let z = 0; z < CHUNK_SIZE; z++) {
-          const worldX = chunk.chunkX * CHUNK_SIZE + x;
-          const worldZ = chunk.chunkZ * CHUNK_SIZE + z;
-          const blockId = this.world.peekBlock(worldX, y, worldZ);
+          const blockId = chunk.getBlock(x, y, z);
           if (blockId === 0) continue;
 
           for (const { dir, face } of FACE_DIRECTIONS) {
@@ -123,82 +124,99 @@ export class ChunkMesher {
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.computeBoundingSphere();
-    geometry.computeBoundingBox();
-
-    const material = new THREE.MeshLambertMaterial({
-      vertexColors: true,
-      side: THREE.FrontSide,
-    });
 
     const worldXBase = chunk.chunkX * CHUNK_SIZE;
     const worldZBase = chunk.chunkZ * CHUNK_SIZE;
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(worldXBase, 0, worldZBase);
-    mesh.frustumCulled = false;
     return mesh;
   }
 }
 
 export class WorldRenderer {
-  constructor(scene, world) {
+  constructor(scene, world, options = {}) {
     this.scene = scene;
     this.world = world;
     this.mesher = new ChunkMesher(world);
     this.chunkMeshes = new Map();
+    this.remeshQueue = [];
+    this.remeshQueued = new Set();
+    this.centerChunkX = null;
+    this.centerChunkZ = null;
+    this.remeshBudget = options.mobile ? REMESH_BUDGET_MOBILE : REMESH_BUDGET_DESKTOP;
+    this.sharedMaterial = new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      side: THREE.FrontSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    });
+  }
+
+  enqueueChunk(chunkX, chunkZ) {
+    const key = `${chunkX},${chunkZ}`;
+    if (this.remeshQueued.has(key)) return;
+    this.remeshQueued.add(key);
+    this.remeshQueue.push(key);
   }
 
   update(playerX, playerZ) {
-    const chunks = this.world.loadChunksAround(playerX, playerZ);
-    this.world.unloadDistantChunks(playerX, playerZ);
-    this.propagateDirtyFlags(chunks);
+    const chunkX = Math.floor(playerX / CHUNK_SIZE);
+    const chunkZ = Math.floor(playerZ / CHUNK_SIZE);
+    const movedChunk = chunkX !== this.centerChunkX || chunkZ !== this.centerChunkZ;
 
-    const activeKeys = new Set(chunks.map((chunk) => `${chunk.chunkX},${chunk.chunkZ}`));
+    if (movedChunk) {
+      this.centerChunkX = chunkX;
+      this.centerChunkZ = chunkZ;
 
-    // Mesh only after the full chunk ring is loaded so border faces are correct.
-    for (const chunk of chunks) {
-      const key = `${chunk.chunkX},${chunk.chunkZ}`;
-      if (!chunk.dirty && this.chunkMeshes.has(key)) continue;
+      const chunks = this.world.loadChunksAround(playerX, playerZ);
+      this.world.unloadDistantChunks(playerX, playerZ);
+
+      const activeKeys = new Set();
+      for (const chunk of chunks) {
+        const key = `${chunk.chunkX},${chunk.chunkZ}`;
+        activeKeys.add(key);
+        if (chunk.dirty || !this.chunkMeshes.has(key)) {
+          this.enqueueChunk(chunk.chunkX, chunk.chunkZ);
+        }
+      }
+
+      for (const [key, mesh] of this.chunkMeshes) {
+        if (!activeKeys.has(key)) {
+          this.scene.remove(mesh);
+          mesh.geometry.dispose();
+          this.chunkMeshes.delete(key);
+        }
+      }
+    }
+
+    this.processRemeshQueue();
+  }
+
+  processRemeshQueue() {
+    const budget = this.remeshQueue.length > 16
+      ? this.remeshBudget * 3
+      : this.remeshBudget;
+    let processed = 0;
+
+    while (this.remeshQueue.length > 0 && processed < budget) {
+      const key = this.remeshQueue.shift();
+      this.remeshQueued.delete(key);
+      if (!key) continue;
+
+      const [chunkX, chunkZ] = key.split(',').map(Number);
+      const chunk = this.world.chunks.get(this.world.chunkKey(chunkX, chunkZ));
+      if (!chunk) continue;
 
       this.removeChunkMesh(key);
-      const mesh = this.mesher.buildChunkMesh(chunk);
+      const mesh = this.mesher.buildChunkMesh(chunk, this.sharedMaterial);
       if (mesh) {
         this.scene.add(mesh);
         this.chunkMeshes.set(key, mesh);
       }
       chunk.dirty = false;
       chunk.mesh = mesh;
-    }
-
-    for (const [key, mesh] of this.chunkMeshes) {
-      if (!activeKeys.has(key)) {
-        this.scene.remove(mesh);
-        mesh.geometry.dispose();
-        mesh.material.dispose();
-        this.chunkMeshes.delete(key);
-      }
-    }
-  }
-
-  propagateDirtyFlags(chunks) {
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const chunk of chunks) {
-        if (!chunk.dirty) continue;
-        const neighbors = [
-          [-1, 0], [1, 0], [0, -1], [0, 1],
-          [-1, -1], [-1, 1], [1, -1], [1, 1],
-        ];
-        for (const [dx, dz] of neighbors) {
-          const neighbor = this.world.chunks.get(
-            this.world.chunkKey(chunk.chunkX + dx, chunk.chunkZ + dz)
-          );
-          if (neighbor && !neighbor.dirty) {
-            neighbor.dirty = true;
-            changed = true;
-          }
-        }
-      }
+      processed++;
     }
   }
 
@@ -207,7 +225,6 @@ export class WorldRenderer {
     if (existing) {
       this.scene.remove(existing);
       existing.geometry.dispose();
-      existing.material.dispose();
       this.chunkMeshes.delete(key);
     }
   }
@@ -216,25 +233,31 @@ export class WorldRenderer {
     const { chunkX, chunkZ } = this.world.worldToChunk(worldX, worldZ);
     const chunk = this.world.getChunk(chunkX, chunkZ);
     chunk.dirty = true;
+    this.enqueueChunk(chunkX, chunkZ);
 
     const local = chunk.worldToLocal(worldX, 0, worldZ);
-    if (local.x === 0) this.world.getChunk(chunkX - 1, chunkZ).dirty = true;
-    if (local.x === CHUNK_SIZE - 1) this.world.getChunk(chunkX + 1, chunkZ).dirty = true;
-    if (local.z === 0) this.world.getChunk(chunkX, chunkZ - 1).dirty = true;
-    if (local.z === CHUNK_SIZE - 1) this.world.getChunk(chunkX, chunkZ + 1).dirty = true;
-    if (local.x === 0 && local.z === 0) this.world.getChunk(chunkX - 1, chunkZ - 1).dirty = true;
-    if (local.x === 0 && local.z === CHUNK_SIZE - 1) this.world.getChunk(chunkX - 1, chunkZ + 1).dirty = true;
-    if (local.x === CHUNK_SIZE - 1 && local.z === 0) this.world.getChunk(chunkX + 1, chunkZ - 1).dirty = true;
-    if (local.x === CHUNK_SIZE - 1 && local.z === CHUNK_SIZE - 1) this.world.getChunk(chunkX + 1, chunkZ + 1).dirty = true;
+    if (local.x === 0) this.enqueueNeighbor(chunkX - 1, chunkZ);
+    if (local.x === CHUNK_SIZE - 1) this.enqueueNeighbor(chunkX + 1, chunkZ);
+    if (local.z === 0) this.enqueueNeighbor(chunkX, chunkZ - 1);
+    if (local.z === CHUNK_SIZE - 1) this.enqueueNeighbor(chunkX, chunkZ + 1);
+  }
+
+  enqueueNeighbor(chunkX, chunkZ) {
+    const chunk = this.world.chunks.get(this.world.chunkKey(chunkX, chunkZ));
+    if (!chunk) return;
+    chunk.dirty = true;
+    this.enqueueChunk(chunkX, chunkZ);
   }
 
   dispose() {
     for (const [, mesh] of this.chunkMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
-      mesh.material.dispose();
     }
     this.chunkMeshes.clear();
+    this.sharedMaterial.dispose();
+    this.remeshQueue = [];
+    this.remeshQueued.clear();
   }
 }
 

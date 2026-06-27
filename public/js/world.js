@@ -254,7 +254,6 @@ export class World {
   markNeighborChunksDirty(chunkX, chunkZ) {
     const offsets = [
       [-1, 0], [1, 0], [0, -1], [0, 1],
-      [-1, -1], [-1, 1], [1, -1], [1, 1],
     ];
     for (const [dx, dz] of offsets) {
       const neighbor = this.chunks.get(this.chunkKey(chunkX + dx, chunkZ + dz));
@@ -273,7 +272,7 @@ export class World {
     for (let bx = minX; bx <= maxX; bx++) {
       for (let by = minY; by <= maxY; by++) {
         for (let bz = minZ; bz <= maxZ; bz++) {
-          if (isSolid(this.getBlock(bx, by, bz))) return false;
+          if (isSolid(this.peekBlock(bx, by, bz))) return false;
         }
       }
     }
