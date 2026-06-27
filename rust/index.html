@@ -42,8 +42,32 @@
       pointer-events: none;
       display: none;
     }
-    body.mobile #mobile-controls { display: block; }
-    body.mobile.playing #mobile-start { display: none; }
+    /* Hidden until WASM/game loop is ready */
+    body.mobile.ready #mobile-controls {
+      display: block;
+    }
+    body.mobile.playing #mobile-start {
+      display: none;
+    }
+    /* Gameplay controls only after Tap to Play */
+    body.mobile #joystick,
+    body.mobile .mobile-actions,
+    body.mobile #mobile-hotbar {
+      display: none;
+    }
+    body.mobile.playing #joystick {
+      display: block;
+    }
+    body.mobile.playing .mobile-actions {
+      display: grid;
+    }
+    body.mobile.playing #mobile-hotbar {
+      display: flex;
+    }
+    /* Let DOM overlay receive touches until playing; canvas handles look after */
+    body.mobile:not(.playing) canvas {
+      pointer-events: none;
+    }
 
     .mobile-start-btn {
       position: absolute;
@@ -216,7 +240,6 @@
       document.body.classList.add('mobile');
 
       let wasmApi = null;
-      let pendingStart = false;
       let gameplayControlsReady = false;
 
       function getWasmApi() {
@@ -230,12 +253,23 @@
         return true;
       }
 
+      function isPlaying() {
+        return document.body.classList.contains('playing');
+      }
+
+      function canUseGameplayControls() {
+        return isPlaying() && !document.body.classList.contains('menu-open');
+      }
+
+      function markReady() {
+        document.body.classList.add('ready');
+      }
+
       function startGame(e) {
         e?.preventDefault();
         e?.stopPropagation();
-        if (document.body.classList.contains('playing')) return;
+        if (isPlaying()) return;
         document.body.classList.add('playing');
-        pendingStart = true;
         callWasm('nc_set_mobile', true);
         callWasm('nc_mobile_start');
       }
@@ -251,7 +285,7 @@
         gameplayControlsReady = true;
         wasmApi = w;
         w.nc_set_mobile(true);
-        if (pendingStart) {
+        if (isPlaying()) {
           w.nc_mobile_start();
         }
 
@@ -259,16 +293,11 @@
         const knob = document.getElementById('joystick-knob');
         if (!joystick || !knob) return;
 
-        let enabled = pendingStart;
         let joystickTouchId = null;
         let lookTouchId = null;
         let joystickCenter = { x: 0, y: 0 };
         let joystickRadius = 50;
         let lookTouch = { x: 0, y: 0 };
-
-        function canUseGameplayControls() {
-          return enabled && !document.body.classList.contains('menu-open');
-        }
 
         function resetJoystick() {
           joystickTouchId = null;
@@ -356,13 +385,13 @@
           e.preventDefault();
           lookTouchId = touch.identifier;
           lookTouch = { x: touch.clientX, y: touch.clientY };
-        }, { passive: false });
+        }, { passive: false, capture: true });
 
         function bindButton(id, onDown, onUp) {
           const el = document.getElementById(id);
           if (!el) return;
           el.addEventListener('touchstart', (e) => {
-            if (!enabled) return;
+            if (!isPlaying()) return;
             e.preventDefault();
             e.stopPropagation();
             onDown();
@@ -398,7 +427,7 @@
         });
 
         bindButton('btn-inventory', () => {
-          if (!enabled) return;
+          if (!isPlaying()) return;
           resetJoystick();
           w.nc_mobile_toggle_inventory();
         });
@@ -416,26 +445,29 @@
           slot.classList.add('selected');
           w.nc_mobile_select_hotbar(index);
         }, { passive: false });
-
-        // If the player tapped Play before wasm finished booting, enable controls now.
-        enabled = document.body.classList.contains('playing');
       }
 
       function tryConnectWasm() {
         const api = getWasmApi();
         if (!api || typeof api.nc_mobile_start !== 'function') return false;
         initGameplayControls(api);
+        if (isPlaying()) {
+          api.nc_mobile_start();
+        }
         return true;
       }
 
       window.addEventListener('TrunkApplicationStarted', () => {
+        markReady();
         tryConnectWasm();
       });
 
       (function waitForWasmExports() {
-        if (!tryConnectWasm()) {
-          requestAnimationFrame(waitForWasmExports);
+        if (tryConnectWasm()) {
+          markReady();
+          return;
         }
+        requestAnimationFrame(waitForWasmExports);
       })();
     })();
   </script>

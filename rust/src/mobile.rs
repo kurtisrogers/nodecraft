@@ -145,10 +145,7 @@ pub fn clear_mobile_frame(mut mobile: ResMut<MobileInput>) {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn sync_mobile_menu_class(player: Res<PlayerState>, mobile: Res<MobileInput>) {
-    if !mobile.is_mobile {
-        return;
-    }
+fn set_body_class(class: &str, add: bool) {
     let Some(window) = web_sys::window() else {
         return;
     };
@@ -159,11 +156,33 @@ pub fn sync_mobile_menu_class(player: Res<PlayerState>, mobile: Res<MobileInput>
         return;
     };
     let class_list = body.class_list();
-    if player.inventory_open {
-        let _ = class_list.add_1("menu-open");
+    if add {
+        let _ = class_list.add_1(class);
     } else {
-        let _ = class_list.remove_1("menu-open");
+        let _ = class_list.remove_1(class);
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn notify_mobile_ui_ready(mut notified: Local<bool>) {
+    if *notified || !detect_mobile_device() {
+        return;
+    }
+    *notified = true;
+    set_body_class("mobile", true);
+    set_body_class("ready", true);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn notify_mobile_ui_ready(_notified: Local<bool>) {}
+
+#[cfg(target_arch = "wasm32")]
+pub fn sync_mobile_menu_class(player: Res<PlayerState>, mobile: Res<MobileInput>) {
+    if !mobile.is_mobile {
+        return;
+    }
+    set_body_class("menu-open", player.inventory_open);
+    set_body_class("playing", mobile.active);
 }
 
 #[cfg(target_arch = "wasm32")]
