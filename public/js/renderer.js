@@ -148,9 +148,6 @@ export class WorldRenderer {
     this.sharedMaterial = new THREE.MeshLambertMaterial({
       vertexColors: true,
       side: THREE.FrontSide,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
     });
   }
 

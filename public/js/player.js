@@ -167,18 +167,40 @@ export class Player {
     const head = this._headPos;
     head.set(feet.x, feet.y + EYE_HEIGHT, feet.z);
 
-    if (this.isPointBlocked(head.x, head.y, head.z)) {
+    const probes = [
+      [0, 0, 0],
+      [0.22, 0, 0], [-0.22, 0, 0],
+      [0, 0.18, 0], [0, -0.18, 0],
+      [0, 0, 0.22], [0, 0, -0.22],
+    ];
+
+    let blocked = false;
+    for (const [dx, dy, dz] of probes) {
+      if (this.isPointBlocked(head.x + dx, head.y + dy, head.z + dz, 0.14)) {
+        blocked = true;
+        break;
+      }
+    }
+
+    if (blocked) {
       let placed = false;
-      for (let t = 0.85; t >= 0.3; t -= 0.1) {
+      for (let t = 0.85; t >= 0.2; t -= 0.08) {
         head.set(feet.x, feet.y + EYE_HEIGHT * t, feet.z);
-        if (!this.isPointBlocked(head.x, head.y, head.z)) {
+        let clear = true;
+        for (const [dx, dy, dz] of probes) {
+          if (this.isPointBlocked(head.x + dx, head.y + dy, head.z + dz, 0.12)) {
+            clear = false;
+            break;
+          }
+        }
+        if (clear) {
           placed = true;
           break;
         }
       }
       if (!placed) {
-        head.lerp(feet, 0.45);
-        head.y = Math.max(feet.y + 0.35, head.y);
+        head.lerp(feet, 0.5);
+        head.y = Math.max(feet.y + 0.3, head.y);
       }
     }
 
@@ -358,6 +380,23 @@ export class Player {
     this.position.y += this.velocity.y * dt;
     this.onGround = false;
     this.collideAxis('y', half);
+    this.clampHeadroom(half);
+  }
+
+  clampHeadroom(half) {
+    const px = Math.floor(this.position.x);
+    const pz = Math.floor(this.position.z);
+    const headY = this.position.y + PLAYER_HEIGHT;
+    const ceilingY = Math.floor(headY - 0.05);
+
+    for (let x = Math.floor(this.position.x - half); x <= Math.floor(this.position.x + half); x++) {
+      for (let z = Math.floor(this.position.z - half); z <= Math.floor(this.position.z + half); z++) {
+        if (!isSolid(this.world.peekBlock(x, ceilingY, z))) continue;
+        this.position.y = ceilingY - PLAYER_HEIGHT - 0.01;
+        this.velocity.y = Math.min(this.velocity.y, 0);
+        return;
+      }
+    }
   }
 
   resolvePenetration(half) {

@@ -168,4 +168,23 @@ export class NoiseGenerator {
   lavaPoolChance(worldX, worldZ) {
     return this.fbm(worldX * 0.06 + 2000, worldZ * 0.06 + 2000, 3);
   }
+
+  caveDensity(worldX, y, worldZ) {
+    const wx = worldX * 0.065;
+    const wy = y * 0.085;
+    const wz = worldZ * 0.065;
+    const layerA = this.fbm(wx, wz + wy * 0.45, 3, 0.5, 2);
+    const layerB = this.fbm(wx + wy + 40, wz + 120, 3, 0.48, 2);
+    return layerA + layerB;
+  }
+
+  isCave(worldX, y, worldZ, surfaceY) {
+    if (y <= 1 || y >= surfaceY - 3) return false;
+    return this.caveDensity(worldX, y, worldZ) < 0.15;
+  }
+
+  isDeepCavern(worldX, y, worldZ, surfaceY) {
+    if (y > 26 || y < 4 || y >= surfaceY - 6) return false;
+    return this.caveDensity(worldX, y, worldZ) < -0.05;
+  }
 }

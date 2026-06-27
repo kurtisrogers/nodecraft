@@ -108,9 +108,9 @@ export class Chunk {
 
         if (isLand && this.noise.isVolcanic(worldX, worldZ)) {
           this.generateVolcanicFeatures(x, z, height);
-        } else if (isLand) {
-          this.generateUndergroundLava(x, z, height);
         }
+
+        this.carveUnderground(x, z, height, worldX, worldZ);
       }
     }
   }
@@ -150,29 +150,81 @@ export class Chunk {
     return score;
   }
 
-  generateUndergroundLava(x, z, height) {
-    const worldX = this.chunkX * CHUNK_SIZE + x;
-    const worldZ = this.chunkZ * CHUNK_SIZE + z;
-    const pool = this.noise.lavaPoolChance(worldX, worldZ);
-    if (pool < 0.62) return;
+  carveUnderground(x, z, surfaceY, worldX, worldZ) {
+    const carveTop = Math.min(surfaceY - 3, WORLD_HEIGHT - 2);
 
-    const depth = 2 + Math.floor(this.noise.roll(worldX, worldZ, 19) * 6);
-    const radius = this.noise.roll(worldX, worldZ, 23) > 0.7 ? 2 : 1;
+    for (let y = 2; y < carveTop; y++) {
+      if (this.getBlock(x, y, z) !== BlockId.STONE) continue;
+      if (this.noise.isCave(worldX, y, worldZ, surfaceY)) {
+        this.setBlock(x, y, z, BlockId.AIR);
+      }
+    }
 
+    for (let y = 4; y <= 26; y++) {
+      if (y >= carveTop) break;
+      if (this.getBlock(x, y, z) !== BlockId.AIR) continue;
+
+      const floor = this.getBlock(x, y - 1, z);
+      if (floor !== BlockId.STONE) continue;
+
+      const openness = this.countCaveOpenness(x, y, z);
+      if (openness < 5) continue;
+
+      const deep = this.noise.isDeepCavern(worldX, y, worldZ, surfaceY);
+      const lavaRoll = this.noise.roll(worldX + y * 3, worldZ + y * 5, 29);
+      const threshold = deep ? 0.08 : 0.035;
+      if (lavaRoll > threshold) continue;
+
+      this.setBlock(x, y, z, BlockId.LAVA);
+      this.expandLavaPool(x, y, z, deep ? 2 : 1);
+    }
+  }
+
+  countCaveOpenness(x, y, z) {
+    let score = 0;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -1; dy <= 2; dy++) {
+        for (let dz = -2; dz <= 2; dz++) {
+          const lx = x + dx;
+          const ly = y + dy;
+          const lz = z + dz;
+          if (lx < 0 || lx >= CHUNK_SIZE || ly < 0 || ly >= WORLD_HEIGHT || lz < 0 || lz >= CHUNK_SIZE) {
+            continue;
+          }
+          const block = this.getBlock(lx, ly, lz);
+          if (block === BlockId.AIR || block === BlockId.LAVA) score++;
+        }
+      }
+    }
+    return score;
+  }
+
+  expandLavaPool(x, y, z, radius) {
     for (let dx = -radius; dx <= radius; dx++) {
       for (let dz = -radius; dz <= radius; dz++) {
+        if (dx === 0 && dz === 0) continue;
         if (dx * dx + dz * dz > radius * radius) continue;
         const lx = x + dx;
         const lz = z + dz;
         if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
-        for (let dy = 0; dy < 2; dy++) {
-          const ly = depth + dy;
-          if (ly >= height || ly >= WORLD_HEIGHT - 1) continue;
-          if (this.getBlock(lx, ly, lz) === BlockId.STONE) {
-            this.setBlock(lx, ly, lz, dy === 0 ? BlockId.LAVA : BlockId.AIR);
-          }
-        }
+        if (this.getBlock(lx, y, lz) !== BlockId.AIR) continue;
+        if (this.getBlock(lx, y - 1, lz) !== BlockId.STONE) continue;
+        this.setBlock(lx, y, lz, BlockId.LAVA);
       }
+    }
+  }
+
+  generateUndergroundLava(x, z, height) {
+    // Legacy pockets near bedrock — caves handle most underground lava now.
+    const worldX = this.chunkX * CHUNK_SIZE + x;
+    const worldZ = this.chunkZ * CHUNK_SIZE + z;
+    const pool = this.noise.lavaPoolChance(worldX, worldZ);
+    if (pool < 0.75) return;
+
+    const depth = 3 + Math.floor(this.noise.roll(worldX, worldZ, 19) * 4);
+    if (depth >= height) return;
+    if (this.getBlock(x, depth, z) === BlockId.STONE) {
+      this.setBlock(x, depth, z, BlockId.LAVA);
     }
   }
 
