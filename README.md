@@ -1,5 +1,7 @@
 # Nodecraft
 
+**[Play the single-player demo →](https://kurtisrogers.github.io/nodecraft/)**
+
 A Minecraft-like voxel sandbox game built with **Node.js** and **Three.js**.
 
 ![Nodecraft](https://img.shields.io/badge/node-%3E%3D18-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
