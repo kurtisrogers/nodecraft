@@ -101,7 +101,9 @@ export class ChunkMesher {
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let y = 0; y < WORLD_HEIGHT; y++) {
         for (let z = 0; z < CHUNK_SIZE; z++) {
-          const blockId = chunk.getBlock(x, y, z);
+          const worldX = chunk.chunkX * CHUNK_SIZE + x;
+          const worldZ = chunk.chunkZ * CHUNK_SIZE + z;
+          const blockId = this.world.peekBlock(worldX, y, worldZ);
           if (blockId === 0) continue;
 
           for (const { dir, face } of FACE_DIRECTIONS) {
@@ -148,6 +150,7 @@ export class WorldRenderer {
   update(playerX, playerZ) {
     const chunks = this.world.loadChunksAround(playerX, playerZ);
     this.world.unloadDistantChunks(playerX, playerZ);
+    this.propagateDirtyFlags(chunks);
 
     const activeKeys = new Set(chunks.map((chunk) => `${chunk.chunkX},${chunk.chunkZ}`));
 
@@ -176,6 +179,29 @@ export class WorldRenderer {
     }
   }
 
+  propagateDirtyFlags(chunks) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const chunk of chunks) {
+        if (!chunk.dirty) continue;
+        const neighbors = [
+          [-1, 0], [1, 0], [0, -1], [0, 1],
+          [-1, -1], [-1, 1], [1, -1], [1, 1],
+        ];
+        for (const [dx, dz] of neighbors) {
+          const neighbor = this.world.chunks.get(
+            this.world.chunkKey(chunk.chunkX + dx, chunk.chunkZ + dz)
+          );
+          if (neighbor && !neighbor.dirty) {
+            neighbor.dirty = true;
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
   removeChunkMesh(key) {
     const existing = this.chunkMeshes.get(key);
     if (existing) {
@@ -196,6 +222,10 @@ export class WorldRenderer {
     if (local.x === CHUNK_SIZE - 1) this.world.getChunk(chunkX + 1, chunkZ).dirty = true;
     if (local.z === 0) this.world.getChunk(chunkX, chunkZ - 1).dirty = true;
     if (local.z === CHUNK_SIZE - 1) this.world.getChunk(chunkX, chunkZ + 1).dirty = true;
+    if (local.x === 0 && local.z === 0) this.world.getChunk(chunkX - 1, chunkZ - 1).dirty = true;
+    if (local.x === 0 && local.z === CHUNK_SIZE - 1) this.world.getChunk(chunkX - 1, chunkZ + 1).dirty = true;
+    if (local.x === CHUNK_SIZE - 1 && local.z === 0) this.world.getChunk(chunkX + 1, chunkZ - 1).dirty = true;
+    if (local.x === CHUNK_SIZE - 1 && local.z === CHUNK_SIZE - 1) this.world.getChunk(chunkX + 1, chunkZ + 1).dirty = true;
   }
 
   dispose() {

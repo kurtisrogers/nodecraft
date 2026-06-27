@@ -53,9 +53,9 @@ export class TouchControls {
     this.startBtn.classList.add('hidden');
     document.getElementById('instructions')?.classList.add('hidden');
 
+    this.player.spawn();
     this.game.world.loadChunksAround(this.player.position.x, this.player.position.z);
     this.game.worldRenderer.update(this.player.position.x, this.player.position.z);
-    this.player.spawn();
   }
 
   resetJoystick() {
