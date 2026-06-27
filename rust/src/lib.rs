@@ -113,8 +113,8 @@ fn setup_scene(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.insert_resource(AmbientLight {
-        color: Color::WHITE,
-        brightness: 600.0,
+        color: Color::srgb(0.85, 0.88, 0.92),
+        brightness: 400.0,
     });
     commands.spawn((
         DirectionalLight {

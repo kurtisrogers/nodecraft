@@ -9,6 +9,7 @@ use crate::mobile::{is_controlling, MobileInput};
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
+use bevy_pbr::{DistanceFog, FogFalloff};
 
 #[derive(Resource)]
 pub struct PlayerState {
@@ -57,6 +58,22 @@ pub fn spawn_player(
         Camera3d::default(),
         Transform::from_translation(player.position + Vec3::Y * EYE_HEIGHT),
         PlayerCamera,
+        DistanceFog {
+            color: Color::srgb(0.53, 0.81, 0.92),
+            falloff: FogFalloff::Linear {
+                start: if cfg!(target_arch = "wasm32") {
+                    48.0
+                } else {
+                    crate::config::FOG_START
+                },
+                end: if cfg!(target_arch = "wasm32") {
+                    128.0
+                } else {
+                    crate::config::FOG_END
+                },
+            },
+            ..default()
+        },
     ));
 }
 
@@ -201,15 +218,36 @@ fn move_with_collision(player: &mut PlayerState, world: &mut crate::world::Voxel
     player.on_ground = false;
 
     player.position.x += player.velocity.x * dt;
-    resolve_axis(world, &mut player.position, half, PLAYER_HEIGHT, 0);
+    resolve_axis(
+        world,
+        &mut player.position,
+        half,
+        PLAYER_HEIGHT,
+        0,
+        player.velocity.x.signum(),
+    );
 
     player.position.z += player.velocity.z * dt;
-    resolve_axis(world, &mut player.position, half, PLAYER_HEIGHT, 2);
+    resolve_axis(
+        world,
+        &mut player.position,
+        half,
+        PLAYER_HEIGHT,
+        2,
+        player.velocity.z.signum(),
+    );
 
+    let vy_before = player.velocity.y;
     player.position.y += player.velocity.y * dt;
-    let was_falling = player.velocity.y <= 0.0;
-    resolve_axis(world, &mut player.position, half, PLAYER_HEIGHT, 1);
-    if was_falling && player.velocity.y <= 0.0 {
+    let landed = resolve_axis(
+        world,
+        &mut player.position,
+        half,
+        PLAYER_HEIGHT,
+        1,
+        vy_before.signum(),
+    );
+    if landed && vy_before <= 0.0 {
         player.on_ground = true;
         player.velocity.y = 0.0;
     }
@@ -221,7 +259,8 @@ fn resolve_axis(
     half: f32,
     height: f32,
     axis: usize,
-) {
+    velocity_sign: f32,
+) -> bool {
     let min = [pos.x - half, pos.y, pos.z - half];
     let max = [pos.x + half, pos.y + height, pos.z + half];
     let min_b = [
@@ -230,11 +269,12 @@ fn resolve_axis(
         min[2].floor() as i32,
     ];
     let max_b = [
-        max[0].floor() as i32,
-        max[1].floor() as i32,
-        max[2].floor() as i32,
+        (max[0] - 0.001).floor() as i32,
+        (max[1] - 0.001).floor() as i32,
+        (max[2] - 0.001).floor() as i32,
     ];
 
+    let mut hit = false;
     for bx in min_b[0]..=max_b[0] {
         for by in min_b[1]..=max_b[1] {
             for bz in min_b[2]..=max_b[2] {
@@ -252,32 +292,34 @@ fn resolve_axis(
                 {
                     continue;
                 }
+                hit = true;
                 match axis {
                     0 => {
-                        if pos.x < (bx as f32 + 0.5) {
-                            pos.x = bx as f32 - half - 0.001;
+                        if velocity_sign <= 0.0 {
+                            pos.x = block_min.x - half - 0.001;
                         } else {
-                            pos.x = bx as f32 + 1.0 + half + 0.001;
+                            pos.x = block_max.x + half + 0.001;
                         }
                     }
                     1 => {
-                        if pos.y < (by as f32 + 0.5) {
-                            pos.y = by as f32 - 0.001;
+                        if velocity_sign > 0.0 {
+                            pos.y = block_min.y - height - 0.001;
                         } else {
-                            pos.y = by as f32 + 1.0 + 0.001;
+                            pos.y = block_max.y + 0.001;
                         }
                     }
                     _ => {
-                        if pos.z < (bz as f32 + 0.5) {
-                            pos.z = bz as f32 - half - 0.001;
+                        if velocity_sign <= 0.0 {
+                            pos.z = block_min.z - half - 0.001;
                         } else {
-                            pos.z = bz as f32 + 1.0 + half + 0.001;
+                            pos.z = block_max.z + half + 0.001;
                         }
                     }
                 }
             }
         }
     }
+    hit
 }
 
 pub struct RayHit {
