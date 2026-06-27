@@ -57,8 +57,10 @@ export class Chunk {
         const worldZ = worldZBase + z;
         const height = this.noise.terrainHeight(worldX, worldZ);
         const biome = this.noise.biome(worldX, worldZ);
-        const isDesert = biome.temperature > 0.3 && biome.moisture < -0.1;
-        const isSnow = biome.temperature < -0.3;
+        const isLand = this.noise.isLand(worldX, worldZ);
+        const isShallow = this.noise.isShallowOcean(worldX, worldZ);
+        const isDesert = isLand && biome.temperature > 0.3 && biome.moisture < -0.1;
+        const isSnow = isLand && biome.temperature < -0.3;
 
         for (let y = 0; y < WORLD_HEIGHT; y++) {
           let block = BlockId.AIR;
@@ -66,32 +68,47 @@ export class Chunk {
           if (y === 0) {
             block = BlockId.BEDROCK;
           } else if (y < height - 4) {
-            block = BlockId.STONE;
+            block = isShallow ? BlockId.SAND : BlockId.STONE;
           } else if (y < height - 1) {
-            block = isDesert ? BlockId.SAND : BlockId.DIRT;
+            block = isDesert || isShallow ? BlockId.SAND : BlockId.DIRT;
           } else if (y < height) {
-            if (isDesert) block = BlockId.SAND;
+            if (isDesert || isShallow) block = BlockId.SAND;
             else if (isSnow) block = BlockId.SNOW;
-            else block = BlockId.GRASS;
-          } else if (y <= SEA_LEVEL) {
+            else if (isLand) block = BlockId.GRASS;
+            else block = BlockId.SAND;
+          } else if (y <= SEA_LEVEL && height <= SEA_LEVEL) {
             block = BlockId.WATER;
           }
 
           this.blocks[this.index(x, y, z)] = block;
         }
 
-        if (height > SEA_LEVEL + 1 && !isDesert && !isSnow) {
+        const surfaceY = height - 1;
+        if (surfaceY < 1) continue;
+
+        if (isLand && height > SEA_LEVEL + 1 && !isDesert && !isSnow) {
           if (this.noise.shouldPlaceTree(worldX, worldZ)) {
-            const clear = this.countTreeClearance(x, z, height);
-            if (clear >= 20) {
-              this.generateTree(x, height, z);
+            const clear = this.countTreeClearance(x, z, surfaceY);
+            if (clear >= 18) {
+              this.generateTree(x, surfaceY, z);
+            }
+          } else if (this.noise.shouldPlaceBush(worldX, worldZ)) {
+            this.generateBush(x, surfaceY, z);
+          }
+
+          const above = surfaceY + 1;
+          if (above < WORLD_HEIGHT && this.getBlock(x, above, z) === BlockId.AIR) {
+            if (this.noise.shouldPlaceFlower(worldX, worldZ)) {
+              this.setBlock(x, above, z, BlockId.FLOWER);
+            } else if (this.noise.shouldPlaceTallGrass(worldX, worldZ)) {
+              this.setBlock(x, above, z, BlockId.TALL_GRASS);
             }
           }
         }
 
-        if (this.noise.isVolcanic(worldX, worldZ)) {
+        if (isLand && this.noise.isVolcanic(worldX, worldZ)) {
           this.generateVolcanicFeatures(x, z, height);
-        } else {
+        } else if (isLand) {
           this.generateUndergroundLava(x, z, height);
         }
       }
@@ -117,16 +134,16 @@ export class Chunk {
     this.generateUndergroundLava(x, z, height);
   }
 
-  countTreeClearance(x, z, groundY) {
+  countTreeClearance(x, z, surfaceY) {
     let score = 0;
     for (let dx = -2; dx <= 2; dx++) {
       for (let dz = -2; dz <= 2; dz++) {
         const lx = x + dx;
         const lz = z + dz;
         if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
-        const foot = this.getBlock(lx, groundY + 1, lz);
-        const head = this.getBlock(lx, groundY + 2, lz);
-        if (foot === BlockId.AIR) score++;
+        const foot = this.getBlock(lx, surfaceY + 1, lz);
+        const head = this.getBlock(lx, surfaceY + 2, lz);
+        if (foot === BlockId.AIR || foot === BlockId.TALL_GRASS || foot === BlockId.FLOWER) score++;
         if (head === BlockId.AIR) score++;
       }
     }
@@ -159,8 +176,9 @@ export class Chunk {
     }
   }
 
-  generateTree(x, groundY, z) {
-    if (this.getBlock(x, groundY, z) !== BlockId.GRASS && this.getBlock(x, groundY, z) !== BlockId.DIRT) {
+  generateTree(x, surfaceY, z) {
+    const surface = this.getBlock(x, surfaceY, z);
+    if (surface !== BlockId.GRASS && surface !== BlockId.DIRT && surface !== BlockId.SNOW) {
       return;
     }
 
@@ -169,11 +187,11 @@ export class Chunk {
     const variant = this.noise.roll(worldX, worldZ, 11);
     const trunkHeight = variant > 0.7 ? 6 : variant > 0.35 ? 5 : 4;
     for (let y = 0; y < trunkHeight; y++) {
-      if (groundY + y < WORLD_HEIGHT) {
-        this.setBlock(x, groundY + y, z, BlockId.WOOD);
+      if (surfaceY + y < WORLD_HEIGHT) {
+        this.setBlock(x, surfaceY + y, z, BlockId.WOOD);
       }
     }
-    const leafStart = groundY + trunkHeight - 2;
+    const leafStart = surfaceY + trunkHeight - 2;
     for (let dy = 0; dy < 4; dy++) {
       for (let dx = -2; dx <= 2; dx++) {
         for (let dz = -2; dz <= 2; dz++) {
@@ -182,9 +200,28 @@ export class Chunk {
           const lx = x + dx;
           const ly = leafStart + dy;
           const lz = z + dz;
-          if (this.getBlock(lx, ly, lz) === BlockId.AIR) {
+          const existing = this.getBlock(lx, ly, lz);
+          if (existing === BlockId.AIR || existing === BlockId.TALL_GRASS || existing === BlockId.FLOWER) {
             this.setBlock(lx, ly, lz, BlockId.LEAVES);
           }
+        }
+      }
+    }
+  }
+
+  generateBush(x, surfaceY, z) {
+    const surface = this.getBlock(x, surfaceY, z);
+    if (surface !== BlockId.GRASS && surface !== BlockId.DIRT) return;
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const lx = x + dx;
+        const lz = z + dz;
+        if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) continue;
+        const ly = surfaceY + 1;
+        if (ly >= WORLD_HEIGHT) continue;
+        if (this.getBlock(lx, ly, lz) === BlockId.AIR) {
+          this.setBlock(lx, ly, lz, BlockId.LEAVES);
         }
       }
     }
@@ -409,7 +446,8 @@ export class World {
     for (const { x, z } of candidates) {
       this.getChunk(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE));
       const surfaceY = this.getWalkableSurfaceY(x, z);
-      if (surfaceY < 0 || surfaceY <= SEA_LEVEL) continue;
+      if (surfaceY < 0 || surfaceY <= SEA_LEVEL + 1) continue;
+      if (!this.noise.isLand(x, z)) continue;
       if (this.getBlock(x, surfaceY, z) === BlockId.LAVA) continue;
 
       const openness = this.countOpenSpace(x, z, surfaceY);

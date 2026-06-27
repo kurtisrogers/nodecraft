@@ -82,7 +82,11 @@ class Game {
     this.player.spawn();
     this.player.updateSelectedBlock();
     this.ui.refreshHotbar();
-    this.worldRenderer.update(this.player.position.x, this.player.position.z);
+    this.worldRenderer.flushBorderRing(
+      Math.floor(this.player.position.x / 16),
+      Math.floor(this.player.position.z / 16),
+      2
+    );
 
     this.setupNetwork();
 

@@ -56,6 +56,11 @@ export class TouchControls {
     this.player.spawn();
     this.game.world.loadChunksAround(this.player.position.x, this.player.position.z);
     this.game.worldRenderer.update(this.player.position.x, this.player.position.z);
+    this.game.worldRenderer.flushBorderRing(
+      Math.floor(this.player.position.x / 16),
+      Math.floor(this.player.position.z / 16),
+      2
+    );
   }
 
   resetJoystick() {

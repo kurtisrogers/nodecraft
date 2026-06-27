@@ -15,6 +15,8 @@ export const BlockId = {
   CRAFTING_TABLE: 13,
   LAVA: 14,
   OBSIDIAN: 15,
+  TALL_GRASS: 16,
+  FLOWER: 17,
 };
 
 export const BLOCKS = {
@@ -133,6 +135,20 @@ export const BLOCKS = {
     solid: true,
     transparent: false,
     color: 0x1a0a2e,
+  },
+  [BlockId.TALL_GRASS]: {
+    id: BlockId.TALL_GRASS,
+    name: 'Tall Grass',
+    solid: false,
+    transparent: true,
+    color: 0x4a9e32,
+  },
+  [BlockId.FLOWER]: {
+    id: BlockId.FLOWER,
+    name: 'Flower',
+    solid: false,
+    transparent: true,
+    color: { top: 0xffdd55, side: 0x3d8a2f, bottom: 0x3d8a2f },
   },
 };
 

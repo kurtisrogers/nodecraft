@@ -68,22 +68,45 @@ export class NoiseGenerator {
     return total / max;
   }
 
+  continentalness(worldX, worldZ) {
+    const macro = this.fbm(worldX * 0.0032 + 180, worldZ * 0.0032 + 180, 5, 0.52, 2);
+    const medium = this.fbm(worldX * 0.0085, worldZ * 0.0085, 3, 0.45, 2) * 0.3;
+    return macro + medium;
+  }
+
+  isLand(worldX, worldZ) {
+    return this.continentalness(worldX, worldZ) > -0.08;
+  }
+
+  isShallowOcean(worldX, worldZ) {
+    const cont = this.continentalness(worldX, worldZ);
+    return cont > -0.28 && cont <= -0.08;
+  }
+
   terrainHeight(worldX, worldZ) {
-    const scale = 0.02;
-    const height =
-      this.fbm(worldX * scale, worldZ * scale, 5, 0.5, 2) * 24 +
-      this.fbm(worldX * scale * 2, worldZ * scale * 2, 3, 0.4, 2) * 8;
-    return Math.floor(32 + height);
+    const cont = this.continentalness(worldX, worldZ);
+
+    if (cont < -0.28) {
+      const depth = (cont + 1) * 0.5;
+      return Math.floor(12 + depth * 8);
+    }
+
+    if (cont < -0.08) {
+      const shore = (cont + 0.28) / 0.2;
+      const detail = this.fbm(worldX * 0.025, worldZ * 0.025, 3, 0.4, 2) * 3;
+      return Math.floor(18 + shore * 16 + detail);
+    }
+
+    const landFactor = Math.min(1, (cont + 0.08) / 0.45);
+    const hills = this.fbm(worldX * 0.016, worldZ * 0.016, 5, 0.5, 2) * 24;
+    const ridges = this.fbm(worldX * 0.04, worldZ * 0.04, 3, 0.42, 2) * 9;
+    return Math.floor(34 + landFactor * 18 + hills + ridges);
   }
 
   biome(worldX, worldZ) {
     const moisture = this.fbm(worldX * 0.01 + 100, worldZ * 0.01 + 100, 3);
     const temperature = this.fbm(worldX * 0.008, worldZ * 0.008, 3);
     return { moisture, temperature };
-  }
-
-  treeChance(worldX, worldZ) {
-    return this.fbm(worldX * 0.1 + 500, worldZ * 0.1 + 500, 2);
   }
 
   hash2D(x, z) {
@@ -97,24 +120,49 @@ export class NoiseGenerator {
   }
 
   isVolcanic(worldX, worldZ) {
+    if (!this.isLand(worldX, worldZ)) return false;
     const biome = this.biome(worldX, worldZ);
     return biome.temperature > 0.35 && biome.moisture < 0;
   }
 
   isForest(worldX, worldZ) {
+    if (!this.isLand(worldX, worldZ)) return false;
     const biome = this.biome(worldX, worldZ);
     return biome.moisture > 0.05 && biome.temperature > -0.2 && biome.temperature < 0.35;
   }
 
+  isMeadow(worldX, worldZ) {
+    if (!this.isLand(worldX, worldZ)) return false;
+    const biome = this.biome(worldX, worldZ);
+    return biome.moisture > -0.05 && biome.temperature > -0.1 && biome.temperature < 0.3;
+  }
+
   shouldPlaceTree(worldX, worldZ) {
+    if (!this.isLand(worldX, worldZ)) return false;
     const biome = this.biome(worldX, worldZ);
     const isDesert = biome.temperature > 0.3 && biome.moisture < -0.1;
     const isSnow = biome.temperature < -0.3;
     if (isDesert || isSnow) return false;
 
     const roll = this.roll(worldX, worldZ, 7);
-    if (this.isForest(worldX, worldZ)) return roll < 0.14;
-    return roll < 0.06;
+    if (this.isForest(worldX, worldZ)) return roll < 0.22;
+    if (this.isMeadow(worldX, worldZ)) return roll < 0.1;
+    return roll < 0.05;
+  }
+
+  shouldPlaceBush(worldX, worldZ) {
+    if (!this.isLand(worldX, worldZ)) return false;
+    return this.roll(worldX, worldZ, 13) < 0.07;
+  }
+
+  shouldPlaceTallGrass(worldX, worldZ) {
+    if (!this.isLand(worldX, worldZ)) return false;
+    return this.roll(worldX, worldZ, 17) < 0.16;
+  }
+
+  shouldPlaceFlower(worldX, worldZ) {
+    if (!this.isLand(worldX, worldZ)) return false;
+    return this.roll(worldX, worldZ, 19) < 0.05;
   }
 
   lavaPoolChance(worldX, worldZ) {

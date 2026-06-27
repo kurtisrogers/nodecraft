@@ -22,6 +22,9 @@ export const ItemId = {
   LEATHER: 102,
   ROTTEN_FLESH: 103,
   BEEF: 104,
+  WOOL: 105,
+  FEATHER: 106,
+  RAW_CHICKEN: 107,
 };
 
 export const ITEMS = {
@@ -30,6 +33,9 @@ export const ITEMS = {
   [ItemId.LEATHER]: { id: ItemId.LEATHER, name: 'Leather', stackable: true, maxStack: 64, placeable: false, color: 0x8b4513 },
   [ItemId.ROTTEN_FLESH]: { id: ItemId.ROTTEN_FLESH, name: 'Rotten Flesh', stackable: true, maxStack: 64, placeable: false, color: 0x5a4a3a },
   [ItemId.BEEF]: { id: ItemId.BEEF, name: 'Raw Beef', stackable: true, maxStack: 64, placeable: false, color: 0xcc4444 },
+  [ItemId.WOOL]: { id: ItemId.WOOL, name: 'Wool', stackable: true, maxStack: 64, placeable: false, color: 0xf0f0f0 },
+  [ItemId.FEATHER]: { id: ItemId.FEATHER, name: 'Feather', stackable: true, maxStack: 64, placeable: false, color: 0xffffff },
+  [ItemId.RAW_CHICKEN]: { id: ItemId.RAW_CHICKEN, name: 'Raw Chicken', stackable: true, maxStack: 64, placeable: false, color: 0xffe8c8 },
 };
 
 export const BLOCK_DROPS = {
