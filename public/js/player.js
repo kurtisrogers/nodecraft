@@ -11,6 +11,9 @@ const SPRINT_SPEED = 12;
 const MOUSE_SENSITIVITY = 0.002;
 const PLAYER_HEIGHT = 1.7;
 const PLAYER_WIDTH = 0.6;
+const EYE_HEIGHT = PLAYER_HEIGHT - 0.2;
+const STEP_HEIGHT = 0.6;
+const MAX_DEPENETRATION = 12;
 
 export class Player {
   constructor(camera, world) {
@@ -43,7 +46,37 @@ export class Player {
     this.position.set(spawn.x, spawn.y, spawn.z);
     this.velocity.set(0, 0, 0);
     this.onGround = false;
+    this.ensureVolumeClear();
     this.updateCamera();
+  }
+
+  ensureVolumeClear() {
+    const half = PLAYER_WIDTH / 2;
+    for (let i = 0; i < MAX_DEPENETRATION; i++) {
+      if (this.world.isVolumeClear(this.position.x, this.position.y, this.position.z, half, PLAYER_HEIGHT)) {
+        return;
+      }
+      this.resolvePenetration(half);
+      this.position.y += 0.05;
+    }
+  }
+
+  isPointBlocked(x, y, z, radius = 0.2) {
+    const minX = Math.floor(x - radius);
+    const maxX = Math.floor(x + radius);
+    const minY = Math.floor(y - radius);
+    const maxY = Math.floor(y + radius);
+    const minZ = Math.floor(z - radius);
+    const maxZ = Math.floor(z + radius);
+
+    for (let bx = minX; bx <= maxX; bx++) {
+      for (let by = minY; by <= maxY; by++) {
+        for (let bz = minZ; bz <= maxZ; bz++) {
+          if (isSolid(this.world.getBlock(bx, by, bz))) return true;
+        }
+      }
+    }
+    return false;
   }
 
   setupControls(domElement) {
@@ -128,8 +161,27 @@ export class Player {
   }
 
   updateCamera() {
-    this.camera.position.copy(this.position);
-    this.camera.position.y += PLAYER_HEIGHT - 0.2;
+    const desiredEye = this.position.clone();
+    desiredEye.y += EYE_HEIGHT;
+
+    const eye = desiredEye.clone();
+    if (this.isPointBlocked(eye.x, eye.y, eye.z)) {
+      let found = false;
+      for (let lift = 0.1; lift <= PLAYER_HEIGHT; lift += 0.1) {
+        const test = this.position.clone();
+        test.y += lift;
+        if (!this.isPointBlocked(test.x, test.y, test.z)) {
+          eye.copy(test);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        eye.lerp(this.position, 0.35);
+      }
+    }
+
+    this.camera.position.copy(eye);
     const lookDir = new THREE.Vector3(
       -Math.sin(this.yaw) * Math.cos(this.pitch),
       Math.sin(this.pitch),
@@ -291,17 +343,54 @@ export class Player {
   moveWithCollision(dt) {
     const half = PLAYER_WIDTH / 2;
 
-    this.resolvePenetration(half);
+    for (let i = 0; i < MAX_DEPENETRATION; i++) {
+      if (!this.resolvePenetration(half)) break;
+    }
 
-    this.position.x += this.velocity.x * dt;
-    this.collideAxis('x', half);
-
-    this.position.z += this.velocity.z * dt;
-    this.collideAxis('z', half);
+    this.moveAxisWithStep('x', half, dt);
+    this.moveAxisWithStep('z', half, dt);
 
     this.position.y += this.velocity.y * dt;
     this.onGround = false;
     this.collideAxis('y', half);
+  }
+
+  moveAxisWithStep(axis, half, dt) {
+    const velocity = axis === 'x' ? this.velocity.x : this.velocity.z;
+    const delta = velocity * dt;
+    if (delta === 0) return;
+
+    const wasOnGround = this.onGround;
+    const startPos = this.position.clone();
+
+    const applyMove = (yLift) => {
+      this.position.copy(startPos);
+      this.position.y += yLift;
+      if (axis === 'x') {
+        this.velocity.x = velocity;
+        this.position.x += delta;
+        return this.collideAxis('x', half);
+      }
+      this.velocity.z = velocity;
+      this.position.z += delta;
+      return this.collideAxis('z', half);
+    };
+
+    const hit = applyMove(0);
+    if (!hit) return;
+
+    if (wasOnGround && !applyMove(STEP_HEIGHT)) return;
+
+    this.position.copy(startPos);
+    if (axis === 'x') {
+      this.velocity.x = velocity;
+      this.position.x += delta;
+      this.collideAxis('x', half);
+    } else {
+      this.velocity.z = velocity;
+      this.position.z += delta;
+      this.collideAxis('z', half);
+    }
   }
 
   resolvePenetration(half) {
@@ -344,10 +433,11 @@ export class Player {
           } else if (minOverlap === overlapFront) this.position.z -= overlapFront + 0.001;
           else this.position.z += overlapBack + 0.001;
 
-          return;
+          return true;
         }
       }
     }
+    return false;
   }
 
   collideAxis(axis, half) {
@@ -382,9 +472,10 @@ export class Player {
             } else continue;
             this.velocity.y = 0;
           }
-          return;
+          return true;
         }
       }
     }
+    return false;
   }
 }

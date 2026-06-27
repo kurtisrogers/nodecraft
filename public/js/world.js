@@ -254,11 +254,30 @@ export class World {
   markNeighborChunksDirty(chunkX, chunkZ) {
     const offsets = [
       [-1, 0], [1, 0], [0, -1], [0, 1],
+      [-1, -1], [-1, 1], [1, -1], [1, 1],
     ];
     for (const [dx, dz] of offsets) {
       const neighbor = this.chunks.get(this.chunkKey(chunkX + dx, chunkZ + dz));
       if (neighbor) neighbor.dirty = true;
     }
+  }
+
+  isVolumeClear(x, y, z, half = 0.3, height = 1.7) {
+    const minX = Math.floor(x - half);
+    const maxX = Math.floor(x + half);
+    const minY = Math.floor(y);
+    const maxY = Math.floor(y + height);
+    const minZ = Math.floor(z - half);
+    const maxZ = Math.floor(z + half);
+
+    for (let bx = minX; bx <= maxX; bx++) {
+      for (let by = minY; by <= maxY; by++) {
+        for (let bz = minZ; bz <= maxZ; bz++) {
+          if (isSolid(this.getBlock(bx, by, bz))) return false;
+        }
+      }
+    }
+    return true;
   }
 
   peekBlock(worldX, worldY, worldZ) {
@@ -397,10 +416,13 @@ export class World {
       const openness = this.countOpenSpace(x, z, surfaceY);
       if (openness < 40) continue;
 
+      const spawnY = surfaceY + 1;
+      if (!this.isVolumeClear(x + 0.5, spawnY, z + 0.5)) continue;
+
       const dist = Math.abs(x - preferredX) + Math.abs(z - preferredZ);
       const score = openness * 5 - dist;
       if (!best || score > best.score) {
-        best = { x, z, y: surfaceY + 1, score };
+        best = { x, z, y: spawnY, score };
       }
     }
 
@@ -409,9 +431,19 @@ export class World {
     }
 
     const surfaceY = this.getWalkableSurfaceY(preferredX, preferredZ);
+    const fallbackY = Math.max(surfaceY + 1, 2);
+    if (this.isVolumeClear(preferredX + 0.5, fallbackY, preferredZ + 0.5)) {
+      return {
+        x: preferredX + 0.5,
+        y: fallbackY,
+        z: preferredZ + 0.5,
+      };
+    }
+
+    const topY = this.getTopSolidBlockY(preferredX, preferredZ) + 1;
     return {
       x: preferredX + 0.5,
-      y: Math.max(surfaceY + 1, 2),
+      y: topY,
       z: preferredZ + 0.5,
     };
   }
