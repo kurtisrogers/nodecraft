@@ -361,6 +361,9 @@ pub fn block_interaction(
     let origin = player.position + Vec3::Y * EYE_HEIGHT;
 
     if mouse.just_pressed(MouseButton::Left) {
+        if player.attack_cooldown >= 0.35 {
+            return;
+        }
         if let Some(hit) = raycast(&mut world.inner, origin, direction, 6.0) {
             let block = world.inner.get_block(hit.block.x, hit.block.y, hit.block.z);
             if block != BlockId::Bedrock && block != BlockId::Lava {

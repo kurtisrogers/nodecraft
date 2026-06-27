@@ -1,6 +1,6 @@
 use crate::config::BUILD_VERSION;
 use crate::inventory::GameInventory;
-use crate::meshing::VoxelWorldResource;
+use crate::mobs::MobManager;
 use crate::player::PlayerState;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
@@ -27,6 +27,8 @@ pub fn draw_hud(
     hud: Res<HudState>,
     player: Res<PlayerState>,
     inventory: Res<GameInventory>,
+    mobs: Res<MobManager>,
+    day: Res<crate::weather::DayNight>,
 ) {
     let ctx = contexts.ctx_mut();
 
@@ -40,6 +42,9 @@ pub fn draw_hud(
                 player.position.x, player.position.y, player.position.z
             ));
             ui.label(format!("Health: {}/20", player.health));
+            ui.label(format!("Mobs nearby: {}", mobs.count));
+            let cycle = (day.time % crate::config::DAY_LENGTH_SECS) / crate::config::DAY_LENGTH_SECS;
+            ui.label(if cycle > 0.5 { "Night" } else { "Day" });
         });
 
     egui::Area::new(egui::Id::new("hotbar"))

@@ -17,6 +17,8 @@ cargo run --release
 
 See [`rust/README.md`](rust/README.md) for system dependencies and multiplayer server.
 
+**GitHub Pages** auto-deploys the **Rust WASM** build on every push to `main`. The classic JS client lives at `/classic/`.
+
 ### Browser (GitHub Pages / Node.js)
 
 ```bash
@@ -42,10 +44,8 @@ Open [http://localhost:3000](http://localhost:3000). GitHub Pages runs single-pl
 - **Recipe panel** — click available recipes to craft instantly
 
 ### Mobs
-- **Pigs & Cows** — passive mobs that wander during the day
-- **Zombies** — hostile mobs that chase players at night
-- **Combat** — attack mobs with LMB to collect drops (pork, beef, leather, rotten flesh)
-- **Day/night cycle** — sky color changes, zombie spawning at night
+- **Rust client** — pigs, cows, sheep, chickens, zombies (hostile at night)
+- **Browser client** — pigs, cows, sheep, chickens, zombies with drops and combat
 
 ### Multiplayer
 - **WebSocket server** — automatic multiplayer when running `npm start`
