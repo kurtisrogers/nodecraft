@@ -64,6 +64,7 @@ optional = true
 getrandom = { version = "0.3", features = ["wasm_js"] }
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
+web-sys = { version = "0.3", features = ["Document", "DomTokenList", "Element", "Window"] }
 
 [profile.dev]
 opt-level = 1
