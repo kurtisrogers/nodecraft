@@ -1,6 +1,7 @@
 use crate::config::BUILD_VERSION;
 use crate::inventory::GameInventory;
 use crate::mobs::MobManager;
+use crate::mobile::MobileInput;
 use crate::player::PlayerState;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
@@ -29,6 +30,7 @@ pub fn draw_hud(
     inventory: Res<GameInventory>,
     mobs: Res<MobManager>,
     day: Res<crate::weather::DayNight>,
+    mobile: Res<MobileInput>,
 ) {
     let ctx = contexts.ctx_mut();
 
@@ -48,7 +50,10 @@ pub fn draw_hud(
         });
 
     egui::Area::new(egui::Id::new("hotbar"))
-        .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -12.0))
+        .anchor(
+            egui::Align2::CENTER_BOTTOM,
+            egui::vec2(0.0, if mobile.is_mobile { -72.0 } else { -12.0 }),
+        )
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 for i in 0..9 {
@@ -68,7 +73,8 @@ pub fn draw_hud(
             });
         });
 
-    if !player.cursor_locked && !player.inventory_open {
+    let show_desktop_help = !mobile.is_mobile && !player.cursor_locked && !player.inventory_open;
+    if show_desktop_help {
         egui::Area::new(egui::Id::new("help"))
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
@@ -76,6 +82,18 @@ pub fn draw_hud(
                 ui.label("Click to play");
                 ui.label("WASD move · Space jump · Shift sprint");
                 ui.label("LMB break · RMB place · E inventory · 1-9 hotbar");
+            });
+    }
+
+    let show_mobile_help = mobile.is_mobile && !mobile.active && !player.inventory_open;
+    if show_mobile_help {
+        egui::Area::new(egui::Id::new("mobile_help"))
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, -80.0))
+            .show(ctx, |ui| {
+                ui.heading("Nodecraft — Rust Edition");
+                ui.label("Tap Play to start");
+                ui.label("Joystick to move · Drag right side to look");
+                ui.label("Buttons to break, place, jump & inventory");
             });
     }
 

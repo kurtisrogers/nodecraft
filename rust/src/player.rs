@@ -5,6 +5,7 @@ use crate::config::{
 };
 use crate::inventory::GameInventory;
 use crate::meshing::{RemeshQueue, VoxelWorldResource};
+use crate::mobile::{is_controlling, MobileInput};
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
@@ -64,8 +65,9 @@ pub fn lock_cursor(
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut player: ResMut<PlayerState>,
+    mobile: Res<MobileInput>,
 ) {
-    if player.inventory_open {
+    if player.inventory_open || mobile.is_mobile {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
@@ -89,8 +91,9 @@ pub fn mouse_look(
     mut motion: EventReader<MouseMotion>,
     mut player: ResMut<PlayerState>,
     mut camera: Query<&mut Transform, With<PlayerCamera>>,
+    mobile: Res<MobileInput>,
 ) {
-    if !player.cursor_locked || player.inventory_open {
+    if !is_controlling(&player, &mobile) {
         motion.clear();
         return;
     }
@@ -98,8 +101,21 @@ pub fn mouse_look(
     for ev in motion.read() {
         delta += ev.delta;
     }
-    player.yaw -= delta.x * MOUSE_SENSITIVITY;
-    player.pitch -= delta.y * MOUSE_SENSITIVITY;
+    if mobile.look_delta != Vec2::ZERO {
+        player.yaw -= mobile.look_delta.x;
+        player.pitch -= mobile.look_delta.y;
+    }
+    if delta != Vec2::ZERO {
+        player.yaw -= delta.x * MOUSE_SENSITIVITY;
+        player.pitch -= delta.y * MOUSE_SENSITIVITY;
+    }
+    if mobile.look_delta == Vec2::ZERO && delta == Vec2::ZERO {
+        if let Ok(mut transform) = camera.get_single_mut() {
+            transform.translation = player.position + Vec3::Y * EYE_HEIGHT;
+            transform.rotation = Quat::from_euler(EulerRot::YXZ, player.yaw, player.pitch, 0.0);
+        }
+        return;
+    }
     player.pitch = player.pitch.clamp(-1.55, 1.55);
 
     if let Ok(mut transform) = camera.get_single_mut() {
@@ -113,16 +129,14 @@ pub fn player_movement(
     keys: Res<ButtonInput<KeyCode>>,
     mut player: ResMut<PlayerState>,
     mut world: ResMut<VoxelWorldResource>,
+    mobile: Res<MobileInput>,
 ) {
     if player.inventory_open {
         return;
     }
     let dt = time.delta_secs().min(0.05);
-    let speed = if keys.pressed(KeyCode::ShiftLeft) {
-        SPRINT_SPEED
-    } else {
-        WALK_SPEED
-    };
+    let sprinting = keys.pressed(KeyCode::ShiftLeft) || mobile.sprint;
+    let speed = if sprinting { SPRINT_SPEED } else { WALK_SPEED };
 
     let forward = Vec3::new(-player.yaw.sin(), 0.0, -player.yaw.cos());
     let right = Vec3::new(player.yaw.cos(), 0.0, -player.yaw.sin());
@@ -139,6 +153,10 @@ pub fn player_movement(
     if keys.pressed(KeyCode::KeyD) {
         wish += right;
     }
+    if mobile.move_vec.length_squared() > 0.0 {
+        wish += forward * -mobile.move_vec.y;
+        wish += right * mobile.move_vec.x;
+    }
     if wish.length_squared() > 0.0 {
         wish = wish.normalize() * speed;
     }
@@ -147,7 +165,7 @@ pub fn player_movement(
     player.velocity.z = wish.z;
     player.velocity.y += GRAVITY * dt;
 
-    if player.on_ground && keys.just_pressed(KeyCode::Space) {
+    if player.on_ground && (keys.just_pressed(KeyCode::Space) || mobile.jump) {
         player.velocity.y = JUMP_VELOCITY;
         player.on_ground = false;
     }
@@ -352,15 +370,16 @@ pub fn block_interaction(
     mut inventory: ResMut<GameInventory>,
     mut queue: ResMut<RemeshQueue>,
     camera: Query<&Transform, With<PlayerCamera>>,
+    mobile: Res<MobileInput>,
 ) {
-    if !player.cursor_locked || player.inventory_open {
+    if !is_controlling(&player, &mobile) {
         return;
     }
     let Ok(cam) = camera.get_single() else { return };
     let direction = cam.rotation * -Vec3::Z;
     let origin = player.position + Vec3::Y * EYE_HEIGHT;
 
-    if mouse.just_pressed(MouseButton::Left) {
+    if mouse.just_pressed(MouseButton::Left) || mobile.break_pressed {
         if player.attack_cooldown >= 0.35 {
             return;
         }
@@ -376,7 +395,7 @@ pub fn block_interaction(
         }
     }
 
-    if mouse.just_pressed(MouseButton::Right) {
+    if mouse.just_pressed(MouseButton::Right) || mobile.place_pressed {
         let Some(item) = inventory.hotbar_item() else { return };
         if !inventory.has_item(item, 1) {
             return;
@@ -418,7 +437,16 @@ fn enqueue_chunk_and_neighbors(world: &crate::world::VoxelWorld, wx: i32, wz: i3
     }
 }
 
-pub fn hotbar_keys(keys: Res<ButtonInput<KeyCode>>, mut inventory: ResMut<GameInventory>) {
+pub fn hotbar_keys(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut inventory: ResMut<GameInventory>,
+    mobile: Res<MobileInput>,
+) {
+    if let Some(index) = mobile.hotbar_select {
+        if index < crate::config::HOTBAR_SIZE {
+            inventory.hotbar_index = index;
+        }
+    }
     let digit_keys = [
         KeyCode::Digit1,
         KeyCode::Digit2,
@@ -437,8 +465,12 @@ pub fn hotbar_keys(keys: Res<ButtonInput<KeyCode>>, mut inventory: ResMut<GameIn
     }
 }
 
-pub fn toggle_inventory(keys: Res<ButtonInput<KeyCode>>, mut player: ResMut<PlayerState>) {
-    if keys.just_pressed(KeyCode::KeyE) {
+pub fn toggle_inventory(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut player: ResMut<PlayerState>,
+    mobile: Res<MobileInput>,
+) {
+    if keys.just_pressed(KeyCode::KeyE) || mobile.inventory_pressed {
         player.inventory_open = !player.inventory_open;
     }
     if keys.just_pressed(KeyCode::Escape) {
