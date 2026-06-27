@@ -5,6 +5,8 @@ pub const SEA_LEVEL: i32 = 30;
 pub const DEFAULT_SEED: u32 = 42;
 pub const RENDER_DISTANCE: i32 = 9;
 pub const DAY_LENGTH_SECS: f32 = 240.0;
+pub const FOG_START: f32 = 72.0;
+pub const FOG_END: f32 = 192.0;
 
 pub const GRAVITY: f32 = -28.0;
 pub const JUMP_VELOCITY: f32 = 10.0;

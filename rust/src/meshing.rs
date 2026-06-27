@@ -59,12 +59,12 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_x: i32, chunk_z: i32) -> Optio
         for y in min_y..=max_y {
             for z in 0..CHUNK_SIZE {
                 let block = get_block_local(&chunk.blocks, x, y, z);
-                if block == BlockId::Air {
+                if !block.solid() {
                     continue;
                 }
                 for (dir, face) in dirs {
                     let neighbor = neighbor_block(world, chunk_x, chunk_z, x + dir[0], y + dir[1], z + dir[2]);
-                    if neighbor.transparent() {
+                    if face_visible(block, neighbor) {
                         push_face(
                             &mut positions,
                             &mut normals,
@@ -118,6 +118,16 @@ fn neighbor_block(world: &VoxelWorld, chunk_x: i32, chunk_z: i32, lx: i32, ly: i
         nz -= CHUNK_SIZE;
     }
     world.peek_block(cx * CHUNK_SIZE + nx, ly, cz * CHUNK_SIZE + nz)
+}
+
+fn face_visible(block: BlockId, neighbor: BlockId) -> bool {
+    if neighbor == BlockId::Air {
+        return true;
+    }
+    if block == neighbor {
+        return false;
+    }
+    neighbor.transparent()
 }
 
 fn push_face(
@@ -193,8 +203,15 @@ pub fn sync_chunk_meshes(
     mut queue: ResMut<RemeshQueue>,
     existing: Query<(Entity, &ChunkMesh)>,
 ) {
-    let mut budget = if cfg!(target_arch = "wasm32") { 2 } else { 4 };
+    let mut budget = if cfg!(target_arch = "wasm32") { 3 } else { 4 };
     let player_chunk = world.player_chunk;
+    let loaded: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
+
+    for (entity, mesh) in existing.iter() {
+        if !loaded.contains(&(mesh.chunk_x, mesh.chunk_z)) {
+            commands.entity(entity).despawn();
+        }
+    }
 
     if queue.keys.is_empty() {
         for &(cx, cz) in &world.loaded_chunks {
