@@ -29,7 +29,7 @@ export class WeatherSystem {
     this.weatherBlend = 1;
     this.flashTimer = 0;
     this.thunderTimer = 0;
-    this.particleCount = isMobileDevice() ? 500 : 1000;
+    this.particleCount = isMobileDevice() ? 280 : 600;
     this.velocities = new Float32Array(this.particleCount);
     this.skyColor = new THREE.Color();
     this.fogColor = new THREE.Color();

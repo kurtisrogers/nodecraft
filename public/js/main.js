@@ -23,14 +23,19 @@ class Game {
     this.frameCount = 0;
     this.fpsTimer = 0;
     this.networkMoveTimer = 0;
+    this.raycastFrame = 0;
     this.init();
   }
 
   init() {
     this.renderSettings = getRenderSettings();
 
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: this.renderSettings.antialias,
+      powerPreference: 'high-performance',
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.renderSettings.pixelRatio));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setClearColor(0x87ceeb);
 
@@ -78,6 +83,7 @@ class Game {
     this.giveStarterItems();
 
     this.world.loadChunksAround(0, 0);
+    this.world.ensureSettlementsNear(0, 0, 320);
     this.worldRenderer.update(0, 0);
     this.player.spawn();
     this.player.updateSelectedBlock();
@@ -85,7 +91,7 @@ class Game {
     this.worldRenderer.flushBorderRing(
       Math.floor(this.player.position.x / 16),
       Math.floor(this.player.position.z / 16),
-      2
+      1
     );
 
     this.setupNetwork();
@@ -122,6 +128,7 @@ class Game {
     this.remotePlayers.sync(players, playerId);
     this.ui.setPlayerCount(players.length);
     this.world.loadChunksAround(0, 0);
+    this.world.ensureSettlementsNear(0, 0, 320);
     this.worldRenderer.update(0, 0);
     this.player.spawn();
     this.worldRenderer.update(this.player.position.x, this.player.position.z);
@@ -159,7 +166,6 @@ class Game {
     this.network.on(MessageType.BLOCK_CHANGE, (msg) => {
       this.world.setBlock(msg.x, msg.y, msg.z, msg.blockId);
       this.worldRenderer.rebuildChunkAt(msg.x, msg.z);
-      this.worldRenderer.update(this.player.position.x, this.player.position.z);
     });
 
     this.network.on(MessageType.MOBS_SYNC, (msg) => {
@@ -227,7 +233,6 @@ class Game {
     }
     this.world.setBlock(x, y, z, BlockId.AIR);
     this.worldRenderer.rebuildChunkAt(x, z);
-    this.worldRenderer.update(this.player.position.x, this.player.position.z);
     this.ui.refreshHotbar();
   }
 
@@ -251,7 +256,6 @@ class Game {
     }
     this.world.setBlock(x, y, z, itemId);
     this.worldRenderer.rebuildChunkAt(x, z);
-    this.worldRenderer.update(this.player.position.x, this.player.position.z);
     this.player.updateSelectedBlock();
     this.ui.refreshHotbar();
   }
@@ -288,7 +292,10 @@ class Game {
     this.renderer.setClearColor(env.skyColor);
     this.scene.fog.color.copy(env.fogColor);
 
-    const hit = this.player.raycast();
+    this.raycastFrame++;
+    const doRaycast = this.raycastFrame % 2 === 0;
+    const hit = doRaycast ? this.player.raycast() : this._lastHit;
+    if (doRaycast) this._lastHit = hit;
     if (hit && this.player.isControlling() && !this.ui.open) {
       this.highlight.show(hit.block.x, hit.block.y, hit.block.z);
     } else {

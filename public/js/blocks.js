@@ -17,6 +17,7 @@ export const BlockId = {
   OBSIDIAN: 15,
   TALL_GRASS: 16,
   FLOWER: 17,
+  WHEAT: 18,
 };
 
 export const BLOCKS = {
@@ -149,6 +150,13 @@ export const BLOCKS = {
     solid: false,
     transparent: true,
     color: { top: 0xffdd55, side: 0x3d8a2f, bottom: 0x3d8a2f },
+  },
+  [BlockId.WHEAT]: {
+    id: BlockId.WHEAT,
+    name: 'Wheat',
+    solid: false,
+    transparent: true,
+    color: { top: 0xd4b84a, side: 0xc4a035, bottom: 0x8b6914 },
   },
 };
 

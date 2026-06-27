@@ -29,20 +29,23 @@ export function isMobileDevice() {
   return coarsePointer || (touchCapable && narrowScreen) || mobileUa;
 }
 
-export const BUILD_VERSION = '1.6.1';
+export const BUILD_VERSION = '1.7.0';
 
 const CHUNK_BLOCKS = 16;
 
-/** View distance tuned per device — desktop sees ~160 blocks, mobile ~112. */
+/** View distance tuned per device — desktop sees ~144 blocks, mobile ~96. */
 export function getRenderSettings() {
   const mobile = isMobileDevice();
-  const renderDistance = mobile ? 7 : 10;
+  const renderDistance = mobile ? 6 : 9;
   const blockRadius = renderDistance * CHUNK_BLOCKS;
 
   return {
+    mobile,
     renderDistance,
-    cameraFar: mobile ? 360 : 480,
+    cameraFar: mobile ? 320 : 420,
     fogNear: Math.round(blockRadius * 0.35),
-    fogFar: Math.round(blockRadius * 1.75),
+    fogFar: Math.round(blockRadius * 1.65),
+    pixelRatio: mobile ? 1.25 : 2,
+    antialias: !mobile,
   };
 }
