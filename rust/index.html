@@ -215,23 +215,23 @@
 
       document.body.classList.add('mobile');
 
-      function waitForWasmExports(callback) {
-        const check = () => {
-          if (typeof window.nc_mobile_start === 'function') {
-            callback(window);
-            return;
-          }
-          requestAnimationFrame(check);
-        };
-        check();
+      function getWasmApi() {
+        return window.wasmBindings;
       }
 
-      waitForWasmExports((w) => {
+      let mobileControlsReady = false;
+
+      function initMobileControls(w) {
+        if (mobileControlsReady) return;
+        if (!w || typeof w.nc_mobile_start !== 'function') return;
+        mobileControlsReady = true;
+
         w.nc_set_mobile(true);
-        const container = document.getElementById('mobile-controls');
         const joystick = document.getElementById('joystick');
         const knob = document.getElementById('joystick-knob');
         const startBtn = document.getElementById('mobile-start');
+        if (!joystick || !knob || !startBtn) return;
+
         let enabled = false;
         let started = false;
         let joystickTouchId = null;
@@ -247,7 +247,7 @@
         function resetJoystick() {
           joystickTouchId = null;
           w.nc_mobile_set_move(0, 0);
-          if (knob) knob.style.transform = 'translate(-50%, -50%)';
+          knob.style.transform = 'translate(-50%, -50%)';
         }
 
         function startGame(e) {
@@ -260,6 +260,7 @@
           w.nc_mobile_start();
         }
 
+        startBtn.addEventListener('touchstart', startGame, { passive: false });
         startBtn.addEventListener('touchend', startGame, { passive: false });
         startBtn.addEventListener('click', startGame);
 
@@ -403,7 +404,25 @@
           slot.classList.add('selected');
           w.nc_mobile_select_hotbar(index);
         }, { passive: false });
-      });
+      }
+
+      const existingApi = getWasmApi();
+      if (existingApi && typeof existingApi.nc_mobile_start === 'function') {
+        initMobileControls(existingApi);
+      } else {
+        window.addEventListener('TrunkApplicationStarted', () => {
+          initMobileControls(getWasmApi());
+        });
+        // Fallback if the Trunk event was already dispatched.
+        (function waitForWasmExports() {
+          const api = getWasmApi();
+          if (api && typeof api.nc_mobile_start === 'function') {
+            initMobileControls(api);
+            return;
+          }
+          requestAnimationFrame(waitForWasmExports);
+        })();
+      }
     })();
   </script>
 </body>
