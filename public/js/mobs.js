@@ -5,6 +5,8 @@ import { WORLD_HEIGHT } from './world.js';
 export const MobType = {
   PIG: 'pig',
   COW: 'cow',
+  SHEEP: 'sheep',
+  CHICKEN: 'chicken',
   ZOMBIE: 'zombie',
 };
 
@@ -17,6 +19,7 @@ export const MOB_DEFS = {
     color: 0xffb6c1,
     size: { w: 0.9, h: 0.9, d: 1.4 },
     drops: [{ itemId: 101, count: 1, chance: 1 }],
+    biomes: ['meadow', 'forest'],
   },
   [MobType.COW]: {
     name: 'Cow',
@@ -26,6 +29,27 @@ export const MOB_DEFS = {
     color: 0x8b7355,
     size: { w: 1.0, h: 1.4, d: 1.6 },
     drops: [{ itemId: 104, count: 1, chance: 1 }, { itemId: 102, count: 1, chance: 0.5 }],
+    biomes: ['meadow'],
+  },
+  [MobType.SHEEP]: {
+    name: 'Sheep',
+    health: 8,
+    speed: 1.8,
+    hostile: false,
+    color: 0xf2f2f2,
+    size: { w: 0.85, h: 1.0, d: 1.3 },
+    drops: [{ itemId: 105, count: 1, chance: 1 }, { itemId: 104, count: 1, chance: 0.35 }],
+    biomes: ['meadow', 'forest'],
+  },
+  [MobType.CHICKEN]: {
+    name: 'Chicken',
+    health: 4,
+    speed: 2.2,
+    hostile: false,
+    color: 0xffffff,
+    size: { w: 0.45, h: 0.55, d: 0.55 },
+    drops: [{ itemId: 107, count: 1, chance: 1 }, { itemId: 106, count: 1, chance: 0.65 }],
+    biomes: ['meadow', 'forest'],
   },
   [MobType.ZOMBIE]: {
     name: 'Zombie',
@@ -35,6 +59,7 @@ export const MOB_DEFS = {
     color: 0x4a7c4e,
     size: { w: 0.6, h: 1.8, d: 0.6 },
     drops: [{ itemId: 103, count: 1, chance: 0.5 }],
+    biomes: ['any'],
   },
 };
 
@@ -64,6 +89,31 @@ function createMobMesh(type) {
     );
     snout.position.set(0, def.size.h * 0.7, def.size.d * 0.45);
     group.add(snout);
+  }
+
+  if (type === MobType.SHEEP) {
+    const wool = new THREE.Mesh(
+      new THREE.BoxGeometry(def.size.w * 1.15, def.size.h * 0.55, def.size.d * 1.05),
+      new THREE.MeshLambertMaterial({ color: 0xffffff })
+    );
+    wool.position.y = def.size.h * 0.38;
+    group.add(wool);
+  }
+
+  if (type === MobType.CHICKEN) {
+    head.scale.set(0.85, 0.85, 0.85);
+    const beak = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.06, 0.12),
+      new THREE.MeshLambertMaterial({ color: 0xffaa00 })
+    );
+    beak.position.set(0, def.size.h * 0.72, def.size.d * 0.28);
+    group.add(beak);
+    const comb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.1, 0.06),
+      new THREE.MeshLambertMaterial({ color: 0xdd2222 })
+    );
+    comb.position.set(0, def.size.h * 0.88, def.size.d * 0.1);
+    group.add(comb);
   }
 
   group.userData.mobType = type;
@@ -237,38 +287,49 @@ export class MobManager {
     return mob;
   }
 
-  trySpawnNear(px, pz) {
-    if (this.mobs.size >= 30) return;
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 15 + Math.random() * 20;
-    const x = px + Math.cos(angle) * dist;
-    const z = pz + Math.sin(angle) * dist;
-    const y = this.world.getSpawnHeight(Math.floor(x), Math.floor(z));
+  pickSpawnType() {
+    const passiveTypes = this.isNight
+      ? [MobType.ZOMBIE, MobType.PIG, MobType.COW, MobType.SHEEP, MobType.CHICKEN]
+      : [MobType.PIG, MobType.COW, MobType.SHEEP, MobType.CHICKEN];
+    const weights = this.isNight
+      ? [0.28, 0.2, 0.2, 0.18, 0.14]
+      : [0.28, 0.28, 0.24, 0.2];
 
-    const types = this.isNight
-      ? [MobType.ZOMBIE, MobType.PIG, MobType.COW]
-      : [MobType.PIG, MobType.COW];
-    const weights = this.isNight ? [0.4, 0.3, 0.3] : [0.5, 0.5];
     const r = Math.random();
     let cumulative = 0;
-    let type = types[0];
-    for (let i = 0; i < types.length; i++) {
+    for (let i = 0; i < passiveTypes.length; i++) {
       cumulative += weights[i];
-      if (r < cumulative) {
-        type = types[i];
-        break;
-      }
+      if (r < cumulative) return passiveTypes[i];
     }
+    return passiveTypes[0];
+  }
 
-    this.spawn(type, x, y, z);
+  trySpawnNear(px, pz) {
+    if (this.mobs.size >= 48) return;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 12 + Math.random() * 24;
+    const x = px + Math.cos(angle) * dist;
+    const z = pz + Math.sin(angle) * dist;
+    const ix = Math.floor(x);
+    const iz = Math.floor(z);
+
+    if (!this.world.noise?.isLand(ix, iz)) return;
+
+    const y = this.world.getSpawnHeight(ix, iz);
+    if (y <= 2) return;
+
+    this.spawn(this.pickSpawnType(), x, y, z);
   }
 
   update(dt, playerPos) {
     if (this.authoritative) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        this.spawnTimer = 5;
-        if (Math.random() < 0.6) this.trySpawnNear(playerPos.x, playerPos.z);
+        this.spawnTimer = 3.5;
+        const spawnCount = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < spawnCount; i++) {
+          if (Math.random() < 0.75) this.trySpawnNear(playerPos.x, playerPos.z);
+        }
       }
     }
 

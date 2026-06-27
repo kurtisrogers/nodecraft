@@ -129,6 +129,7 @@ export class ChunkMesher {
     const worldZBase = chunk.chunkZ * CHUNK_SIZE;
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(worldXBase, 0, worldZBase);
+    mesh.frustumCulled = false;
     return mesh;
   }
 }
@@ -160,6 +161,39 @@ export class WorldRenderer {
     this.remeshQueue.push(key);
   }
 
+  remeshChunkImmediate(chunkX, chunkZ) {
+    const key = `${chunkX},${chunkZ}`;
+    this.remeshQueued.delete(key);
+    this.remeshQueue = this.remeshQueue.filter((k) => k !== key);
+
+    const chunk = this.world.chunks.get(this.world.chunkKey(chunkX, chunkZ));
+    if (!chunk) return;
+
+    this.removeChunkMesh(key);
+    const mesh = this.mesher.buildChunkMesh(chunk, this.sharedMaterial);
+    if (mesh) {
+      this.scene.add(mesh);
+      this.chunkMeshes.set(key, mesh);
+    }
+    chunk.dirty = false;
+    chunk.mesh = mesh;
+  }
+
+  flushBorderRing(centerChunkX, centerChunkZ, radius = 1) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        const chunkX = centerChunkX + dx;
+        const chunkZ = centerChunkZ + dz;
+        const key = `${chunkX},${chunkZ}`;
+        const chunk = this.world.chunks.get(this.world.chunkKey(chunkX, chunkZ));
+        if (!chunk) continue;
+        if (chunk.dirty || !this.chunkMeshes.has(key)) {
+          this.remeshChunkImmediate(chunkX, chunkZ);
+        }
+      }
+    }
+  }
+
   update(playerX, playerZ) {
     const chunkX = Math.floor(playerX / CHUNK_SIZE);
     const chunkZ = Math.floor(playerZ / CHUNK_SIZE);
@@ -188,6 +222,8 @@ export class WorldRenderer {
           this.chunkMeshes.delete(key);
         }
       }
+
+      this.flushBorderRing(chunkX, chunkZ, 1);
     }
 
     this.processRemeshQueue();
@@ -233,20 +269,24 @@ export class WorldRenderer {
     const { chunkX, chunkZ } = this.world.worldToChunk(worldX, worldZ);
     const chunk = this.world.getChunk(chunkX, chunkZ);
     chunk.dirty = true;
-    this.enqueueChunk(chunkX, chunkZ);
+    this.remeshChunkImmediate(chunkX, chunkZ);
 
     const local = chunk.worldToLocal(worldX, 0, worldZ);
-    if (local.x === 0) this.enqueueNeighbor(chunkX - 1, chunkZ);
-    if (local.x === CHUNK_SIZE - 1) this.enqueueNeighbor(chunkX + 1, chunkZ);
-    if (local.z === 0) this.enqueueNeighbor(chunkX, chunkZ - 1);
-    if (local.z === CHUNK_SIZE - 1) this.enqueueNeighbor(chunkX, chunkZ + 1);
+    if (local.x === 0) this.enqueueNeighbor(chunkX - 1, chunkZ, true);
+    if (local.x === CHUNK_SIZE - 1) this.enqueueNeighbor(chunkX + 1, chunkZ, true);
+    if (local.z === 0) this.enqueueNeighbor(chunkX, chunkZ - 1, true);
+    if (local.z === CHUNK_SIZE - 1) this.enqueueNeighbor(chunkX, chunkZ + 1, true);
   }
 
-  enqueueNeighbor(chunkX, chunkZ) {
+  enqueueNeighbor(chunkX, chunkZ, immediate = false) {
     const chunk = this.world.chunks.get(this.world.chunkKey(chunkX, chunkZ));
     if (!chunk) return;
     chunk.dirty = true;
-    this.enqueueChunk(chunkX, chunkZ);
+    if (immediate) {
+      this.remeshChunkImmediate(chunkX, chunkZ);
+    } else {
+      this.enqueueChunk(chunkX, chunkZ);
+    }
   }
 
   dispose() {

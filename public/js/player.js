@@ -39,6 +39,7 @@ export class Player {
     this.lavaDamageTimer = 0;
     this._headPos = new THREE.Vector3();
     this._lookTarget = new THREE.Vector3();
+    this._cameraScratch = new THREE.Vector3();
   }
 
   spawn() {
@@ -176,7 +177,8 @@ export class Player {
         }
       }
       if (!placed) {
-        head.set(feet.x, feet.y + 0.45, feet.z);
+        head.lerp(feet, 0.45);
+        head.y = Math.max(feet.y + 0.35, head.y);
       }
     }
 
