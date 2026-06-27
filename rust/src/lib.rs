@@ -3,6 +3,7 @@ mod chunk_gen;
 mod config;
 mod inventory;
 mod meshing;
+mod mobile;
 mod mobs;
 mod noise;
 mod player;
@@ -16,6 +17,7 @@ use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
 use config::DEFAULT_SEED;
 use meshing::{sync_chunk_meshes, update_world_chunks, ChunkMaterial, RemeshQueue, VoxelWorldResource};
+use mobile::{clear_mobile_frame, init_mobile, sync_mobile_input, sync_mobile_menu_class, MobileInput};
 use mobs::{mob_attack_interaction, mob_ai, mob_spawner, MobManager};
 use player::{
     block_interaction, hotbar_keys, lock_cursor, mouse_look, player_movement, spawn_player,
@@ -67,12 +69,14 @@ pub fn run() {
     .insert_resource(GameInventory::with_starter_items())
     .insert_resource(RemeshQueue::default())
     .insert_resource(HudState::default())
+    .insert_resource(MobileInput::default())
     .insert_resource(weather::DayNight::default())
     .insert_resource(mobs::MobManager::default())
-    .add_systems(Startup, (setup_scene, setup_fog, spawn_player, init_world))
+    .add_systems(Startup, (setup_scene, setup_fog, spawn_player, init_world, init_mobile))
     .add_systems(
         Update,
         (
+            sync_mobile_input,
             lock_cursor,
             mouse_look,
             player_movement,
@@ -81,7 +85,10 @@ pub fn run() {
             block_interaction,
             hotbar_keys,
             toggle_inventory,
-        ),
+            clear_mobile_frame,
+            sync_mobile_menu_class,
+        )
+            .chain(),
     )
     .add_systems(
         Update,

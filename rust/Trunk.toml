@@ -2,6 +2,7 @@
 public_url = "/nodecraft/"
 dist = "dist"
 no_spa = true
+wasm_bindgen = "--target=no-modules"
 
 [serve]
 port = 8080

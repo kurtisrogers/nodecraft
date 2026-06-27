@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Nodecraft</title>
   <style>
     html, body {
@@ -13,6 +16,7 @@
       overflow: hidden;
       background: #0d1b2a;
       font-family: system-ui, sans-serif;
+      touch-action: none;
     }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     #loading {
@@ -30,6 +34,132 @@
     #loading.hidden { opacity: 0; pointer-events: none; }
     #loading h1 { margin: 0 0 0.5rem; font-size: 2rem; }
     #loading p { margin: 0.25rem; opacity: 0.85; }
+
+    #mobile-controls {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      display: none;
+    }
+    body.mobile #mobile-controls { display: block; }
+    body.mobile.playing #mobile-start { display: none; }
+
+    .mobile-start-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 16px 40px;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #e8f5e9;
+      background: rgba(45, 106, 79, 0.9);
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-radius: 12px;
+      pointer-events: auto;
+      cursor: pointer;
+      z-index: 30;
+    }
+
+    #joystick {
+      position: absolute;
+      left: max(16px, env(safe-area-inset-left));
+      bottom: max(100px, calc(16px + env(safe-area-inset-bottom)));
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.35);
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      pointer-events: auto;
+      opacity: 0.85;
+    }
+    body.playing #joystick { opacity: 1; }
+
+    #joystick-knob {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.55);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .mobile-actions {
+      position: absolute;
+      right: max(16px, env(safe-area-inset-right));
+      bottom: max(90px, calc(16px + env(safe-area-inset-bottom)));
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    .mobile-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .mobile-btn-small {
+      width: 44px;
+      height: 44px;
+      font-size: 16px;
+    }
+    .mobile-btn.pressed {
+      background: rgba(90, 158, 58, 0.6);
+      transform: scale(0.95);
+    }
+
+    #mobile-hotbar {
+      position: absolute;
+      left: 50%;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      padding: 6px;
+      pointer-events: auto;
+      z-index: 25;
+    }
+    .hotbar-slot {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .hotbar-slot.selected {
+      border-color: #ffd700;
+      box-shadow: 0 0 6px rgba(255, 215, 0, 0.6);
+    }
+
+    body.menu-open #joystick,
+    body.menu-open .mobile-actions,
+    body.menu-open #mobile-hotbar {
+      opacity: 0.2;
+      pointer-events: none;
+    }
   </style>
   <link data-trunk rel="rust" href="Cargo.toml" />
 </head>
@@ -40,5 +170,241 @@
     <p>Loading WASM…</p>
   </div>
   <canvas id="canvas"></canvas>
+
+  <div id="mobile-controls">
+    <button id="mobile-start" class="mobile-start-btn" type="button">Tap to Play</button>
+    <div id="joystick" aria-label="Move">
+      <div id="joystick-knob"></div>
+    </div>
+    <div class="mobile-actions">
+      <button id="btn-jump" class="mobile-btn" type="button" aria-label="Jump">⬆</button>
+      <button id="btn-sprint" class="mobile-btn mobile-btn-small" type="button" aria-label="Sprint">⚡</button>
+      <button id="btn-break" class="mobile-btn" type="button" aria-label="Break">⛏</button>
+      <button id="btn-place" class="mobile-btn" type="button" aria-label="Place">▣</button>
+      <button id="btn-inventory" class="mobile-btn" type="button" aria-label="Inventory">🎒</button>
+    </div>
+    <div id="mobile-hotbar">
+      <div class="hotbar-slot selected" data-index="0">1</div>
+      <div class="hotbar-slot" data-index="1">2</div>
+      <div class="hotbar-slot" data-index="2">3</div>
+      <div class="hotbar-slot" data-index="3">4</div>
+      <div class="hotbar-slot" data-index="4">5</div>
+      <div class="hotbar-slot" data-index="5">6</div>
+      <div class="hotbar-slot" data-index="6">7</div>
+      <div class="hotbar-slot" data-index="7">8</div>
+      <div class="hotbar-slot" data-index="8">9</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const TOUCH_LOOK_SENSITIVITY = 0.004;
+
+      function isMobileDevice() {
+        if (new URLSearchParams(location.search).has('mobile')) return true;
+        const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+        const narrowScreen = window.matchMedia('(max-width: 900px)').matches;
+        const touchCapable = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const mobileUa = /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        );
+        return coarsePointer || (touchCapable && narrowScreen) || mobileUa;
+      }
+
+      if (!isMobileDevice()) return;
+
+      document.body.classList.add('mobile');
+
+      function waitForWasmExports(callback) {
+        const check = () => {
+          if (typeof window.nc_mobile_start === 'function') {
+            callback(window);
+            return;
+          }
+          requestAnimationFrame(check);
+        };
+        check();
+      }
+
+      waitForWasmExports((w) => {
+        w.nc_set_mobile(true);
+        const container = document.getElementById('mobile-controls');
+        const joystick = document.getElementById('joystick');
+        const knob = document.getElementById('joystick-knob');
+        const startBtn = document.getElementById('mobile-start');
+        let enabled = false;
+        let started = false;
+        let joystickTouchId = null;
+        let lookTouchId = null;
+        let joystickCenter = { x: 0, y: 0 };
+        let joystickRadius = 50;
+        let lookTouch = { x: 0, y: 0 };
+
+        function canUseGameplayControls() {
+          return enabled && !document.body.classList.contains('menu-open');
+        }
+
+        function resetJoystick() {
+          joystickTouchId = null;
+          w.nc_mobile_set_move(0, 0);
+          if (knob) knob.style.transform = 'translate(-50%, -50%)';
+        }
+
+        function startGame(e) {
+          e?.preventDefault();
+          e?.stopPropagation();
+          if (started) return;
+          started = true;
+          enabled = true;
+          document.body.classList.add('playing');
+          w.nc_mobile_start();
+        }
+
+        startBtn.addEventListener('touchend', startGame, { passive: false });
+        startBtn.addEventListener('click', startGame);
+
+        function updateJoystick(clientX, clientY) {
+          let dx = clientX - joystickCenter.x;
+          let dy = clientY - joystickCenter.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > joystickRadius) {
+            dx = (dx / dist) * joystickRadius;
+            dy = (dy / dist) * joystickRadius;
+          }
+          knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+          const nx = dx / joystickRadius;
+          const ny = dy / joystickRadius;
+          w.nc_mobile_set_move(nx, ny);
+        }
+
+        joystick.addEventListener('touchstart', (e) => {
+          if (!canUseGameplayControls()) return;
+          e.preventDefault();
+          const touch = [...e.changedTouches].find((t) => joystick.contains(t.target));
+          if (!touch || joystickTouchId !== null) return;
+          joystickTouchId = touch.identifier;
+          const rect = joystick.getBoundingClientRect();
+          joystickCenter = {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          };
+          joystickRadius = rect.width / 2 - 20;
+          updateJoystick(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+          if (joystickTouchId !== null) {
+            if (!canUseGameplayControls()) {
+              resetJoystick();
+              return;
+            }
+            const touch = [...e.changedTouches].find((t) => t.identifier === joystickTouchId);
+            if (!touch) return;
+            e.preventDefault();
+            updateJoystick(touch.clientX, touch.clientY);
+          }
+
+          if (lookTouchId !== null) {
+            if (!canUseGameplayControls()) {
+              lookTouchId = null;
+              return;
+            }
+            const touch = [...e.changedTouches].find((t) => t.identifier === lookTouchId);
+            if (!touch) return;
+            e.preventDefault();
+            const dx = touch.clientX - lookTouch.x;
+            const dy = touch.clientY - lookTouch.y;
+            lookTouch = { x: touch.clientX, y: touch.clientY };
+            w.nc_mobile_add_look(-dx * TOUCH_LOOK_SENSITIVITY, -dy * TOUCH_LOOK_SENSITIVITY);
+          }
+        }, { passive: false });
+
+        document.addEventListener('touchend', (e) => {
+          const joyTouch = [...e.changedTouches].find((t) => t.identifier === joystickTouchId);
+          if (joyTouch) resetJoystick();
+
+          const lookEnd = [...e.changedTouches].find((t) => t.identifier === lookTouchId);
+          if (lookEnd) lookTouchId = null;
+        });
+        document.addEventListener('touchcancel', (e) => {
+          const joyTouch = [...e.changedTouches].find((t) => t.identifier === joystickTouchId);
+          if (joyTouch) resetJoystick();
+
+          const lookEnd = [...e.changedTouches].find((t) => t.identifier === lookTouchId);
+          if (lookEnd) lookTouchId = null;
+        });
+
+        document.addEventListener('touchstart', (e) => {
+          if (!canUseGameplayControls() || lookTouchId !== null) return;
+          const touch = e.changedTouches[0];
+          if (!touch) return;
+          if (touch.target.closest('.mobile-btn, #joystick, #mobile-hotbar, #mobile-start')) return;
+          if (touch.clientX <= window.innerWidth * 0.35) return;
+          e.preventDefault();
+          lookTouchId = touch.identifier;
+          lookTouch = { x: touch.clientX, y: touch.clientY };
+        }, { passive: false });
+
+        function bindButton(id, onDown, onUp) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('touchstart', (e) => {
+            if (!enabled) return;
+            e.preventDefault();
+            e.stopPropagation();
+            onDown();
+            el.classList.add('pressed');
+          }, { passive: false });
+          const release = (e) => {
+            e.preventDefault();
+            onUp?.();
+            el.classList.remove('pressed');
+          };
+          el.addEventListener('touchend', release, { passive: false });
+          el.addEventListener('touchcancel', release, { passive: false });
+        }
+
+        bindButton('btn-jump', () => {
+          if (!canUseGameplayControls()) return;
+          w.nc_mobile_set_jump(true);
+        }, () => w.nc_mobile_set_jump(false));
+
+        bindButton('btn-sprint', () => {
+          if (!canUseGameplayControls()) return;
+          w.nc_mobile_set_sprint(true);
+        }, () => w.nc_mobile_set_sprint(false));
+
+        bindButton('btn-break', () => {
+          if (!canUseGameplayControls()) return;
+          w.nc_mobile_break();
+        });
+
+        bindButton('btn-place', () => {
+          if (!canUseGameplayControls()) return;
+          w.nc_mobile_place();
+        });
+
+        bindButton('btn-inventory', () => {
+          if (!enabled) return;
+          resetJoystick();
+          w.nc_mobile_toggle_inventory();
+        });
+
+        const hotbar = document.getElementById('mobile-hotbar');
+        hotbar.addEventListener('touchstart', (e) => {
+          if (!canUseGameplayControls()) return;
+          const slot = e.target.closest('.hotbar-slot');
+          if (!slot) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const index = parseInt(slot.dataset.index, 10);
+          if (Number.isNaN(index)) return;
+          hotbar.querySelectorAll('.hotbar-slot').forEach((el) => el.classList.remove('selected'));
+          slot.classList.add('selected');
+          w.nc_mobile_select_hotbar(index);
+        }, { passive: false });
+      });
+    })();
+  </script>
 </body>
 </html>

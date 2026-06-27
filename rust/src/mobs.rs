@@ -1,5 +1,6 @@
 use crate::config::DAY_LENGTH_SECS;
 use crate::meshing::VoxelWorldResource;
+use crate::mobile::{is_controlling, MobileInput};
 use crate::player::PlayerState;
 use crate::world::VoxelWorld;
 use bevy::prelude::*;
@@ -293,11 +294,12 @@ pub fn mob_attack_interaction(
     mut player: ResMut<PlayerState>,
     mut mobs: Query<(Entity, &mut MobEntity, &Transform)>,
     mut commands: Commands,
+    mobile: Res<MobileInput>,
 ) {
-    if !player.cursor_locked || player.inventory_open || player.attack_cooldown > 0.0 {
+    if !is_controlling(&player, &mobile) || player.attack_cooldown > 0.0 {
         return;
     }
-    if !mouse.just_pressed(MouseButton::Left) {
+    if !mouse.just_pressed(MouseButton::Left) && !mobile.break_pressed {
         return;
     }
 
