@@ -1,0 +1,148 @@
+mod blocks;
+mod chunk_gen;
+mod config;
+mod inventory;
+mod meshing;
+mod mobs;
+mod noise;
+mod player;
+mod structures;
+mod ui;
+mod weather;
+mod world;
+
+use bevy::prelude::*;
+use bevy::window::PresentMode;
+use bevy_egui::EguiPlugin;
+use config::DEFAULT_SEED;
+use meshing::{sync_chunk_meshes, update_world_chunks, ChunkMaterial, RemeshQueue, VoxelWorldResource};
+use mobs::{mob_attack_interaction, mob_ai, mob_spawner, MobManager};
+use player::{
+    block_interaction, hotbar_keys, lock_cursor, mouse_look, player_movement, spawn_player,
+    sync_camera, toggle_inventory, PlayerCamera, PlayerState,
+};
+use ui::{draw_hud, setup_fog, update_fps, HudState};
+use weather::{update_day_night, update_lights};
+use inventory::GameInventory;
+
+pub fn run() {
+    let wasm = cfg!(target_arch = "wasm32");
+    let title = if wasm {
+        "Nodecraft — Rust WASM"
+    } else {
+        "Nodecraft — Rust Edition"
+    };
+
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: title.into(),
+                    present_mode: if wasm {
+                        PresentMode::AutoNoVsync
+                    } else {
+                        PresentMode::AutoVsync
+                    },
+                    canvas: if wasm {
+                        Some("#canvas".into())
+                    } else {
+                        None
+                    },
+                    fit_canvas_to_parent: wasm,
+                    prevent_default_event_handling: wasm,
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(bevy::asset::AssetPlugin {
+                watch_for_changes_override: if wasm { Some(false) } else { None },
+                ..default()
+            }),
+    )
+    .add_plugins(EguiPlugin)
+    .insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)))
+    .insert_resource(VoxelWorldResource::new(DEFAULT_SEED))
+    .insert_resource(PlayerState::default())
+    .insert_resource(GameInventory::with_starter_items())
+    .insert_resource(RemeshQueue::default())
+    .insert_resource(HudState::default())
+    .insert_resource(weather::DayNight::default())
+    .insert_resource(mobs::MobManager::default())
+    .add_systems(Startup, (setup_scene, setup_fog, spawn_player, init_world))
+    .add_systems(
+        Update,
+        (
+            lock_cursor,
+            mouse_look,
+            player_movement,
+            sync_camera,
+            mob_attack_interaction,
+            block_interaction,
+            hotbar_keys,
+            toggle_inventory,
+        ),
+    )
+    .add_systems(
+        Update,
+        (
+            mob_spawner,
+            mob_ai,
+            update_world_chunks,
+            sync_chunk_meshes,
+            update_day_night,
+            update_lights,
+            update_fps,
+            draw_hud,
+        ),
+    );
+
+    app.run();
+}
+
+fn setup_scene(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.insert_resource(AmbientLight {
+        color: Color::WHITE,
+        brightness: 600.0,
+    });
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 12000.0,
+            shadows_enabled: !cfg!(target_arch = "wasm32"),
+            ..default()
+        },
+        Transform::from_xyz(50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+
+    let mat = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 1.0,
+        ..default()
+    });
+    commands.insert_resource(ChunkMaterial(mat));
+}
+
+fn init_world(mut world: ResMut<VoxelWorldResource>, mut queue: ResMut<RemeshQueue>) {
+    if cfg!(target_arch = "wasm32") {
+        world.inner.render_distance = 6;
+    }
+    world.loaded_chunks = world.inner.load_chunks_around(0, 0);
+    crate::chunk_gen::ensure_settlements_near(&mut world.inner, 0, 0, 320);
+    for &(cx, cz) in &world.loaded_chunks.clone() {
+        queue.keys.push((cx, cz));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_entry {
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen(start)]
+    pub fn wasm_start() {
+        console_error_panic_hook::set_once();
+        super::run();
+    }
+}

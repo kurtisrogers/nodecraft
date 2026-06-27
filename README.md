@@ -1,10 +1,32 @@
 # Nodecraft
 
-**[Play the single-player demo →](https://kurtisrogers.github.io/nodecraft/)**
+**[Play the browser demo →](https://kurtisrogers.github.io/nodecraft/)** · **Native Rust build in [`rust/`](rust/)**
 
-A Minecraft-like voxel sandbox game built with **Node.js** and **Three.js**.
+A Minecraft-like voxel sandbox — **Rust + Bevy** native client, plus the original **Node.js + Three.js** web client.
 
-![Nodecraft](https://img.shields.io/badge/node-%3E%3D18-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Nodecraft](https://img.shields.io/badge/rust-stable-orange) ![Nodecraft](https://img.shields.io/badge/node-%3E%3D18-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
+
+## Quick Start
+
+### Rust (recommended — best performance)
+
+```bash
+cd rust
+cargo run --release
+```
+
+See [`rust/README.md`](rust/README.md) for system dependencies and multiplayer server.
+
+**GitHub Pages** auto-deploys the **Rust WASM** build on every push to `main`. The classic JS client lives at `/classic/`.
+
+### Browser (GitHub Pages / Node.js)
+
+```bash
+npm install
+npm start
+```
+
+Open [http://localhost:3000](http://localhost:3000). GitHub Pages runs single-player only.
 
 ## Features
 
@@ -22,10 +44,8 @@ A Minecraft-like voxel sandbox game built with **Node.js** and **Three.js**.
 - **Recipe panel** — click available recipes to craft instantly
 
 ### Mobs
-- **Pigs & Cows** — passive mobs that wander during the day
-- **Zombies** — hostile mobs that chase players at night
-- **Combat** — attack mobs with LMB to collect drops (pork, beef, leather, rotten flesh)
-- **Day/night cycle** — sky color changes, zombie spawning at night
+- **Rust client** — pigs, cows, sheep, chickens, zombies (hostile at night)
+- **Browser client** — pigs, cows, sheep, chickens, zombies with drops and combat
 
 ### Multiplayer
 - **WebSocket server** — automatic multiplayer when running `npm start`
@@ -39,32 +59,7 @@ A Minecraft-like voxel sandbox game built with **Node.js** and **Three.js**.
 - **Works on phones & tablets** — iOS Safari, Android Chrome, and GitHub Pages
 - **Tap hotbar slots** to switch blocks; bag button opens inventory & crafting
 
-## Quick Start
-
-### Local (full game + multiplayer)
-
-```bash
-npm install
-npm start
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser. Open multiple tabs or share the URL with friends for multiplayer.
-
-### GitHub Pages (single-player)
-
-GitHub Pages only serves static files — no Node.js or WebSocket server — so the hosted build runs in **single-player mode** with crafting, mobs, and building fully playable.
-
-1. Merge this repo to `main`
-2. In your GitHub repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**
-3. The included workflow deploys the `public/` folder automatically on push to `main`
-
-Your game will be live at `https://<username>.github.io/nodecraft/`
-
-To test static mode locally: `npm start` then open `http://localhost:3000/?static`
-
-## Controls
-
-### Desktop
+## Controls (desktop)
 
 | Key | Action |
 |-----|--------|
@@ -76,9 +71,8 @@ To test static mode locally: `npm start` then open `http://localhost:3000/?stati
 | `RMB` | Place block |
 | `E` | Open inventory & crafting |
 | `1-9` | Select hotbar slot |
-| `Scroll` | Cycle hotbar |
 
-### Mobile
+## Controls (browser)
 
 | Control | Action |
 |---------|--------|
@@ -101,31 +95,29 @@ To test static mode locally: `npm start` then open `http://localhost:3000/?stati
 | Glass | 4 Sand (2×2) | 4 Glass |
 | Cobblestone | 1 Stone | 1 Cobblestone |
 
+## Tech Stack
+
+- **Rust + Bevy** — native desktop client (`rust/`)
+- **Node.js** + **Express** + **ws** — web server + browser multiplayer
+- **Three.js** — WebGL browser client (`public/`)
+- **Tokio + Axum** — Rust WebSocket server (`rust/src/bin/server.rs`)
+
 ## Architecture
 
 ```
-src/
-  server.js          # Express + WebSocket server
-  gameServer.js      # Authoritative game state (players, mobs, blocks)
-  shared/protocol.js # Network message types
-public/
-  js/
-    main.js          # Game loop & system integration
-    world.js         # Chunk & terrain generation
-    inventory.js     # Inventory management
-    crafting.js      # Crafting recipes
-    items.js         # Item & drop definitions
-    mobs.js          # Mob AI, rendering, spawning
-    network.js       # WebSocket client
-    remotePlayers.js # Other player rendering
-    ui.js            # Inventory & crafting UI
+rust/                  # Native Rust + Bevy client (recommended)
+  src/main.rs
+  src/world.rs         # Chunks, terrain, villages
+  src/bin/server.rs    # Multiplayer server
+
+public/                # Browser client (GitHub Pages)
+  js/main.js
+  js/world.js
+
+src/                   # Node.js server (legacy web multiplayer)
+  server.js
+  gameServer.js
 ```
-
-## Tech Stack
-
-- **Node.js** + **Express** + **ws** — HTTP and WebSocket server
-- **Three.js** — WebGL 3D rendering
-- **Vanilla JS** — ES modules, no build step
 
 ## License
 

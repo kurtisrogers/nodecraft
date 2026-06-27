@@ -1,0 +1,83 @@
+[package]
+name = "nodecraft"
+version = "0.2.0"
+edition = "2021"
+description = "Minecraft-like voxel sandbox — Rust + Bevy rebuild"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "nodecraft"
+path = "src/main.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "nodecraft-server"
+path = "src/bin/server.rs"
+required-features = ["server"]
+
+[features]
+default = ["native"]
+native = []
+server = ["dep:tokio", "dep:axum", "dep:tower-http"]
+
+[dependencies]
+bevy = { version = "0.15", default-features = false, features = [
+  "bevy_asset",
+  "bevy_scene",
+  "bevy_winit",
+  "bevy_render",
+  "bevy_core_pipeline",
+  "bevy_pbr",
+  "bevy_window",
+  "bevy_ui",
+  "multi_threaded",
+  "webgl2",
+  "x11",
+  "wayland",
+  "default_font",
+  "tonemapping_luts",
+] }
+bevy_egui = "0.31"
+rand = { version = "0.8", features = ["small_rng"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dependencies.tokio]
+version = "1"
+features = ["rt-multi-thread", "macros", "sync"]
+optional = true
+
+[dependencies.axum]
+version = "0.7"
+features = ["ws"]
+optional = true
+
+[dependencies.tower-http]
+version = "0.6"
+features = ["fs"]
+optional = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1
