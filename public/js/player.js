@@ -233,7 +233,7 @@ export class Player {
     }
 
     if (move.length() > 0) {
-      move.normalize().multiplyScalar(speed * dt);
+      move.normalize().multiplyScalar(speed);
     }
 
     this.velocity.x = move.x;
@@ -291,6 +291,8 @@ export class Player {
   moveWithCollision(dt) {
     const half = PLAYER_WIDTH / 2;
 
+    this.resolvePenetration(half);
+
     this.position.x += this.velocity.x * dt;
     this.collideAxis('x', half);
 
@@ -300,6 +302,52 @@ export class Player {
     this.position.y += this.velocity.y * dt;
     this.onGround = false;
     this.collideAxis('y', half);
+  }
+
+  resolvePenetration(half) {
+    const minX = Math.floor(this.position.x - half);
+    const maxX = Math.floor(this.position.x + half);
+    const minY = Math.floor(this.position.y);
+    const maxY = Math.floor(this.position.y + PLAYER_HEIGHT);
+    const minZ = Math.floor(this.position.z - half);
+    const maxZ = Math.floor(this.position.z + half);
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let z = minZ; z <= maxZ; z++) {
+          if (!isSolid(this.world.getBlock(x, y, z))) continue;
+
+          const overlapLeft = (this.position.x + half) - x;
+          const overlapRight = (x + 1) - (this.position.x - half);
+          const overlapBottom = (this.position.y + PLAYER_HEIGHT) - y;
+          const overlapTop = (y + 1) - this.position.y;
+          const overlapFront = (this.position.z + half) - z;
+          const overlapBack = (z + 1) - (this.position.z - half);
+
+          const minOverlap = Math.min(
+            overlapLeft,
+            overlapRight,
+            overlapBottom,
+            overlapTop,
+            overlapFront,
+            overlapBack
+          );
+
+          if (minOverlap <= 0) continue;
+
+          if (minOverlap === overlapLeft) this.position.x -= overlapLeft + 0.001;
+          else if (minOverlap === overlapRight) this.position.x += overlapRight + 0.001;
+          else if (minOverlap === overlapBottom) this.position.y -= overlapBottom + 0.001;
+          else if (minOverlap === overlapTop) {
+            this.position.y += overlapTop + 0.001;
+            this.onGround = true;
+          } else if (minOverlap === overlapFront) this.position.z -= overlapFront + 0.001;
+          else this.position.z += overlapBack + 0.001;
+
+          return;
+        }
+      }
+    }
   }
 
   collideAxis(axis, half) {
@@ -318,10 +366,12 @@ export class Player {
           if (axis === 'x') {
             if (this.velocity.x > 0) this.position.x = x - half - 0.001;
             else if (this.velocity.x < 0) this.position.x = x + 1 + half + 0.001;
+            else continue;
             this.velocity.x = 0;
           } else if (axis === 'z') {
             if (this.velocity.z > 0) this.position.z = z - half - 0.001;
             else if (this.velocity.z < 0) this.position.z = z + 1 + half + 0.001;
+            else continue;
             this.velocity.z = 0;
           } else {
             if (this.velocity.y > 0) {
@@ -329,9 +379,10 @@ export class Player {
             } else if (this.velocity.y < 0) {
               this.position.y = y + 1 + 0.001;
               this.onGround = true;
-            }
+            } else continue;
             this.velocity.y = 0;
           }
+          return;
         }
       }
     }

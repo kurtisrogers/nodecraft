@@ -88,9 +88,9 @@ export class ChunkMesher {
       nz -= CHUNK_SIZE;
     }
 
-    const neighbor = this.world.chunks.get(this.world.chunkKey(chunkX, chunkZ));
-    if (!neighbor) return 0;
-    return neighbor.getBlock(nx, ly, nz);
+    const worldX = chunkX * CHUNK_SIZE + nx;
+    const worldZ = chunkZ * CHUNK_SIZE + nz;
+    return this.world.peekBlock(worldX, ly, worldZ);
   }
 
   buildChunkMesh(chunk) {

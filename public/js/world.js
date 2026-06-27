@@ -261,6 +261,17 @@ export class World {
     }
   }
 
+  peekBlock(worldX, worldY, worldZ) {
+    if (worldY < 0 || worldY >= WORLD_HEIGHT) return BlockId.AIR;
+    const mod = this.modifications.get(this.modKey(worldX, worldY, worldZ));
+    if (mod !== undefined) return mod;
+    const { chunkX, chunkZ } = this.worldToChunk(worldX, worldZ);
+    const chunk = this.chunks.get(this.chunkKey(chunkX, chunkZ));
+    if (!chunk) return BlockId.AIR;
+    const local = chunk.worldToLocal(worldX, worldY, worldZ);
+    return chunk.getBlock(local.x, local.y, local.z);
+  }
+
   getBlock(worldX, worldY, worldZ) {
     if (worldY < 0 || worldY >= WORLD_HEIGHT) return BlockId.AIR;
     const mod = this.modifications.get(this.modKey(worldX, worldY, worldZ));
@@ -309,11 +320,18 @@ export class World {
   unloadDistantChunks(worldX, worldZ) {
     const { chunkX: centerX, chunkZ: centerZ } = this.worldToChunk(worldX, worldZ);
     const maxDist = this.renderDistance + 2;
+    const removed = [];
+
     for (const [key, chunk] of this.chunks) {
       const dist = Math.max(Math.abs(chunk.chunkX - centerX), Math.abs(chunk.chunkZ - centerZ));
       if (dist > maxDist) {
+        removed.push(chunk);
         this.chunks.delete(key);
       }
+    }
+
+    for (const chunk of removed) {
+      this.markNeighborChunksDirty(chunk.chunkX, chunk.chunkZ);
     }
   }
 
