@@ -55,6 +55,9 @@ pub fn draw_hud(
             egui::vec2(0.0, if mobile.is_mobile { -72.0 } else { -12.0 }),
         )
         .show(ctx, |ui| {
+            if mobile.is_mobile {
+                return;
+            }
             ui.horizontal(|ui| {
                 for i in 0..9 {
                     let slot = &inventory.slots[i];
@@ -82,18 +85,6 @@ pub fn draw_hud(
                 ui.label("Click to play");
                 ui.label("WASD move · Space jump · Shift sprint");
                 ui.label("LMB break · RMB place · E inventory · 1-9 hotbar");
-            });
-    }
-
-    let show_mobile_help = mobile.is_mobile && !mobile.active && !player.inventory_open;
-    if show_mobile_help {
-        egui::Area::new(egui::Id::new("mobile_help"))
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, -80.0))
-            .show(ctx, |ui| {
-                ui.heading("Nodecraft — Rust Edition");
-                ui.label("Tap Play to start");
-                ui.label("Joystick to move · Drag right side to look");
-                ui.label("Buttons to break, place, jump & inventory");
             });
     }
 

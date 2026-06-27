@@ -17,7 +17,7 @@ use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
 use config::DEFAULT_SEED;
 use meshing::{sync_chunk_meshes, update_world_chunks, ChunkMaterial, RemeshQueue, VoxelWorldResource};
-use mobile::{clear_mobile_frame, init_mobile, sync_mobile_input, sync_mobile_menu_class, MobileInput};
+use mobile::{clear_mobile_frame, init_mobile, notify_mobile_ui_ready, sync_mobile_input, sync_mobile_menu_class, MobileInput};
 use mobs::{mob_attack_interaction, mob_ai, mob_spawner, MobManager};
 use player::{
     block_interaction, hotbar_keys, lock_cursor, mouse_look, player_movement, spawn_player,
@@ -87,6 +87,7 @@ pub fn run() {
             toggle_inventory,
             clear_mobile_frame,
             sync_mobile_menu_class,
+            notify_mobile_ui_ready,
         )
             .chain(),
     )
