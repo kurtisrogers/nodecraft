@@ -37,21 +37,14 @@ jobs:
         with:
           version: latest
 
-      - name: Build Rust WASM demo
+      - name: Build Rust WASM
         working-directory: rust
         run: env -u NO_COLOR trunk build --release --public-url /nodecraft/ --no-default-features
-
-      - name: Assemble site
-        run: |
-          mkdir -p site
-          cp -r rust/dist/* site/
-          mkdir -p site/classic
-          cp -r public/* site/classic/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: rust/dist
 
   deploy:
     needs: build

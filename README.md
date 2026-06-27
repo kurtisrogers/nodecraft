@@ -1,122 +1,82 @@
 # Nodecraft
 
-**[Play the browser demo →](https://kurtisrogers.github.io/nodecraft/)** · **Native Rust build in [`rust/`](rust/)**
+**[Play the demo →](https://kurtisrogers.github.io/nodecraft/)**
 
-A Minecraft-like voxel sandbox — **Rust + Bevy** native client, plus the original **Node.js + Three.js** web client.
+A Minecraft-like voxel sandbox built with **Rust + Bevy** — native desktop and WASM browser builds.
 
-![Nodecraft](https://img.shields.io/badge/rust-stable-orange) ![Nodecraft](https://img.shields.io/badge/node-%3E%3D18-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Nodecraft](https://img.shields.io/badge/rust-stable-orange) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## Quick Start
 
-### Rust (recommended — best performance)
+### Desktop (best performance)
 
 ```bash
 cd rust
 cargo run --release
 ```
 
-See [`rust/README.md`](rust/README.md) for system dependencies and multiplayer server.
+### Browser (WASM)
 
-**GitHub Pages** auto-deploys the **Rust WASM** build on every push to `main`. The classic JS client lives at `/classic/`.
+Every push to `main` deploys the WASM build to GitHub Pages automatically.
 
-### Browser (GitHub Pages / Node.js)
+Local dev:
 
 ```bash
-npm install
-npm start
+rustup target add wasm32-unknown-unknown
+cargo install trunk --locked
+cd rust
+env -u NO_COLOR trunk serve --no-default-features
 ```
 
-Open [http://localhost:3000](http://localhost:3000). GitHub Pages runs single-player only.
+Open http://127.0.0.1:8080
+
+See [`rust/README.md`](rust/README.md) for system dependencies and the optional multiplayer server.
 
 ## Features
 
 ### World & Building
-- **Procedural terrain** — infinite world generated with Perlin noise
-- **Biomes** — grasslands, deserts, snowy peaks, and oceans
-- **Trees** — procedurally placed oak trees
-- **Block interaction** — break blocks (LMB) and place blocks (RMB)
-- **13+ block types** — grass, dirt, stone, wood, glass, crafting table, and more
-
-### Crafting & Inventory
-- **Full inventory system** — 36 slots with stackable items (press `E`)
-- **Block drops** — breaking blocks adds resources to your inventory
-- **Crafting recipes** — wood → planks → sticks, crafting table, glass, and more
-- **Recipe panel** — click available recipes to craft instantly
+- Procedural terrain with islands, biomes, caves, and lava
+- Villages with wooden houses, doors, and wheat farms
+- Break blocks (LMB) and place blocks (RMB)
+- 19 block types
 
 ### Mobs
-- **Rust client** — pigs, cows, sheep, chickens, zombies (hostile at night)
-- **Browser client** — pigs, cows, sheep, chickens, zombies with drops and combat
+- Pigs, cows, sheep, chickens — wander during the day
+- Zombies — hostile at night
 
-### Multiplayer
-- **WebSocket server** — automatic multiplayer when running `npm start`
-- **Shared world** — all players see the same terrain, block changes, and mobs
-- **Player avatars** — see other players with name tags in the world
-- **Real-time sync** — movement, block placement, and mob state synced across clients
-- **Not available on GitHub Pages** — requires the Node.js server for WebSocket support
+### Inventory
+- 36-slot inventory with hotbar (press `E`, keys `1-9`)
 
-### Mobile
-- **Touch controls** — virtual joystick, drag-to-look, on-screen action buttons
-- **Works on phones & tablets** — iOS Safari, Android Chrome, and GitHub Pages
-- **Tap hotbar slots** to switch blocks; bag button opens inventory & crafting
-
-## Controls (desktop)
+## Controls
 
 | Key | Action |
 |-----|--------|
+| Click | Lock cursor |
+| `Esc` | Release cursor |
 | `W A S D` | Move |
 | `Space` | Jump |
 | `Shift` | Sprint |
-| `Mouse` | Look around |
-| `LMB` | Break block / Attack mob |
+| `LMB` | Attack mob / break block |
 | `RMB` | Place block |
-| `E` | Open inventory & crafting |
-| `1-9` | Select hotbar slot |
-
-## Controls (browser)
-
-| Control | Action |
-|---------|--------|
-| Joystick (left) | Move |
-| Drag right side | Look around |
-| ⬆ | Jump |
-| ⚡ | Sprint |
-| ⛏ | Break / Attack |
-| ▣ | Place block |
-| 🎒 | Inventory & crafting |
-| Hotbar tap | Select block |
-
-## Crafting Recipes
-
-| Recipe | Ingredients | Output |
-|--------|-------------|--------|
-| Planks | 1 Wood | 4 Planks |
-| Sticks | 2 Planks | 4 Sticks |
-| Crafting Table | 4 Planks (2×2) | 1 Crafting Table |
-| Glass | 4 Sand (2×2) | 4 Glass |
-| Cobblestone | 1 Stone | 1 Cobblestone |
+| `E` | Inventory |
+| `1-9` | Hotbar |
 
 ## Tech Stack
 
-- **Rust + Bevy** — native desktop client (`rust/`)
-- **Node.js** + **Express** + **ws** — web server + browser multiplayer
-- **Three.js** — WebGL browser client (`public/`)
-- **Tokio + Axum** — Rust WebSocket server (`rust/src/bin/server.rs`)
+- **Rust + Bevy** — game client (native + WASM)
+- **Trunk** — WASM build for GitHub Pages
+- **Tokio + Axum** — optional WebSocket server (`rust/src/bin/server.rs`)
 
-## Architecture
+## Project layout
 
 ```
-rust/                  # Native Rust + Bevy client (recommended)
-  src/main.rs
-  src/world.rs         # Chunks, terrain, villages
+rust/
+  src/lib.rs           # Game (native + WASM)
+  src/main.rs          # Desktop entry
+  src/world.rs         # Terrain, chunks, villages
+  src/mobs.rs          # Mob AI
   src/bin/server.rs    # Multiplayer server
-
-public/                # Browser client (GitHub Pages)
-  js/main.js
-  js/world.js
-
-src/                   # Node.js server (legacy web multiplayer)
-  server.js
-  gameServer.js
+  index.html           # WASM shell
 ```
 
 ## License

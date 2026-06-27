@@ -36,8 +36,6 @@ Every push to `main` builds the Rust WASM demo via GitHub Actions and deploys it
 
 **https://kurtisrogers.github.io/nodecraft/**
 
-The classic JavaScript client remains at **/classic/**.
-
 ## Multiplayer server
 
 ```bash
