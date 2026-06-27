@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Nodecraft — Rust Edition</title>
+  <title>Nodecraft</title>
   <style>
     html, body {
       margin: 0;
@@ -30,30 +30,16 @@
     #loading.hidden { opacity: 0; pointer-events: none; }
     #loading h1 { margin: 0 0 0.5rem; font-size: 2rem; }
     #loading p { margin: 0.25rem; opacity: 0.85; }
-    #classic-link {
-      position: fixed;
-      bottom: 12px;
-      right: 12px;
-      z-index: 20;
-      color: #b7e4c7;
-      font-size: 0.85rem;
-      text-decoration: none;
-      background: rgba(0,0,0,0.45);
-      padding: 6px 10px;
-      border-radius: 6px;
-    }
-    #classic-link:hover { text-decoration: underline; }
   </style>
   <link data-trunk rel="rust" href="Cargo.toml" />
 </head>
 <body>
   <div id="loading">
     <h1>Nodecraft</h1>
-    <p>Rust + Bevy edition</p>
+    <p>Rust + Bevy</p>
     <p>Loading WASM…</p>
   </div>
   <canvas id="canvas"></canvas>
-  <a id="classic-link" href="./classic/">Classic JS edition →</a>
   <script>
     window.addEventListener('TrunkApplicationStarted', () => {
       const el = document.getElementById('loading');
