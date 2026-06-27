@@ -140,9 +140,26 @@ fn init_world(mut world: ResMut<VoxelWorldResource>, mut queue: ResMut<RemeshQue
 mod wasm_entry {
     use wasm_bindgen::prelude::*;
 
+    fn hide_loading_overlay() {
+        use wasm_bindgen::JsCast;
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Some(document) = window.document() else {
+            return;
+        };
+        let Some(element) = document.get_element_by_id("loading") else {
+            return;
+        };
+        if let Ok(html_element) = element.dyn_into::<web_sys::HtmlElement>() {
+            let _ = html_element.class_list().add_1("hidden");
+        }
+    }
+
     #[wasm_bindgen(start)]
     pub fn wasm_start() {
         console_error_panic_hook::set_once();
+        hide_loading_overlay();
         super::run();
     }
 }
