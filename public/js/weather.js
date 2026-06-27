@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isMobileDevice } from './config.js';
 
 export const WeatherType = {
   CLEAR: 'clear',
@@ -15,18 +16,28 @@ const WEATHER_LABELS = {
 };
 
 const DAY_LENGTH = 240;
+const WEATHER_BLEND_SEC = 4;
 
 export class WeatherSystem {
   constructor(scene, camera) {
     this.scene = scene;
     this.camera = camera;
     this.type = WeatherType.CLEAR;
+    this.targetType = WeatherType.CLEAR;
     this.dayTime = 0;
     this.weatherTimer = 30;
+    this.weatherBlend = 1;
     this.flashTimer = 0;
     this.thunderTimer = 0;
-    this.particleCount = 1200;
+    this.particleCount = isMobileDevice() ? 500 : 1000;
     this.velocities = new Float32Array(this.particleCount);
+    this.skyColor = new THREE.Color();
+    this.fogColor = new THREE.Color();
+    this.clearSky = new THREE.Color();
+    this.overcastSky = new THREE.Color();
+    this.rainSky = new THREE.Color(0x556677);
+    this.snowSky = new THREE.Color(0x99aabb);
+    this.flashSky = new THREE.Color(0xccccff);
     this.initParticles();
   }
 
@@ -78,13 +89,26 @@ export class WeatherSystem {
     const roll = Math.random();
     const cold = this.dayTime % DAY_LENGTH > DAY_LENGTH * 0.7;
 
-    if (roll < 0.35) this.type = WeatherType.CLEAR;
-    else if (roll < 0.6) this.type = WeatherType.RAIN;
-    else if (roll < 0.8 && cold) this.type = WeatherType.SNOW;
-    else if (roll < 0.9) this.type = WeatherType.THUNDER;
-    else this.type = cold ? WeatherType.SNOW : WeatherType.RAIN;
+    if (roll < 0.35) this.targetType = WeatherType.CLEAR;
+    else if (roll < 0.6) this.targetType = WeatherType.RAIN;
+    else if (roll < 0.8 && cold) this.targetType = WeatherType.SNOW;
+    else if (roll < 0.9) this.targetType = WeatherType.THUNDER;
+    else this.targetType = cold ? WeatherType.SNOW : WeatherType.RAIN;
 
     this.weatherTimer = 45 + Math.random() * 60;
+    this.weatherBlend = 0;
+  }
+
+  getPrecipIntensity(type) {
+    switch (type) {
+      case WeatherType.RAIN:
+      case WeatherType.THUNDER:
+        return 1;
+      case WeatherType.SNOW:
+        return 0.85;
+      default:
+        return 0;
+    }
   }
 
   update(dt, playerPos) {
@@ -92,13 +116,22 @@ export class WeatherSystem {
     this.weatherTimer -= dt;
     if (this.weatherTimer <= 0) this.pickNextWeather();
 
-    const isPrecip = this.type !== WeatherType.CLEAR;
+    if (this.weatherBlend < 1) {
+      this.weatherBlend = Math.min(1, this.weatherBlend + dt / WEATHER_BLEND_SEC);
+      if (this.weatherBlend >= 1) this.type = this.targetType;
+    }
+
+    const currentPrecip = this.getPrecipIntensity(this.type) * (1 - this.weatherBlend)
+      + this.getPrecipIntensity(this.targetType) * this.weatherBlend;
+    const isPrecip = currentPrecip > 0.05;
     this.particles.visible = isPrecip;
-    this.particles.material = this.type === WeatherType.SNOW ? this.snowMaterial : this.rainMaterial;
 
     if (isPrecip) {
+      const isSnow = this.targetType === WeatherType.SNOW
+        || (this.type === WeatherType.SNOW && this.weatherBlend < 1);
+      this.particles.material = isSnow ? this.snowMaterial : this.rainMaterial;
+
       const positions = this.particles.geometry.attributes.position;
-      const isSnow = this.type === WeatherType.SNOW;
       const px = playerPos.x;
       const py = playerPos.y + 10;
       const pz = playerPos.z;
@@ -109,8 +142,8 @@ export class WeatherSystem {
         let z = positions.getZ(i);
 
         y -= this.velocities[i] * dt * (isSnow ? 0.35 : 1);
-        x += (isSnow ? Math.sin(this.dayTime + i) * 0.02 : -0.05);
-        z += (isSnow ? Math.cos(this.dayTime + i) * 0.02 : 0);
+        x += isSnow ? Math.sin(this.dayTime + i) * 0.02 : -0.05;
+        z += isSnow ? Math.cos(this.dayTime + i) * 0.02 : 0;
 
         if (y < playerPos.y - 2) {
           y = py + Math.random() * 15;
@@ -121,10 +154,9 @@ export class WeatherSystem {
         positions.setXYZ(i, x, y, z);
       }
       positions.needsUpdate = true;
-      this.particles.position.set(0, 0, 0);
     }
 
-    if (this.type === WeatherType.THUNDER) {
+    if (this.type === WeatherType.THUNDER || this.targetType === WeatherType.THUNDER) {
       this.thunderTimer -= dt;
       if (this.thunderTimer <= 0) {
         this.thunderTimer = 4 + Math.random() * 12;
@@ -134,48 +166,50 @@ export class WeatherSystem {
 
     if (this.flashTimer > 0) this.flashTimer -= dt;
 
-    return this.getEnvironment();
+    return this.getEnvironment(currentPrecip);
   }
 
-  getEnvironment() {
+  getEnvironment(precipIntensity = 0) {
     const sun = this.sunHeight;
     const night = this.isNight;
 
-    let sky = new THREE.Color();
     if (night) {
-      sky.setHex(0x0a0a20);
+      this.clearSky.setHex(0x0a0a20);
     } else if (sun > 0) {
-      sky.setHSL(0.58, 0.6, 0.45 + sun * 0.25);
+      this.clearSky.setHSL(0.58, 0.6, 0.45 + sun * 0.25);
     } else {
-      sky.setHex(0x1a1040);
+      this.clearSky.setHex(0x1a1040);
     }
 
-    if (this.type === WeatherType.RAIN || this.type === WeatherType.THUNDER) {
-      sky.lerp(new THREE.Color(0x556677), 0.55);
-    } else if (this.type === WeatherType.SNOW) {
-      sky.lerp(new THREE.Color(0x99aabb), 0.4);
+    this.overcastSky.copy(this.clearSky);
+    if (precipIntensity > 0) {
+      const overcast = this.targetType === WeatherType.SNOW ? this.snowSky : this.rainSky;
+      this.overcastSky.lerp(overcast, 0.55 * precipIntensity);
     }
 
+    this.skyColor.copy(this.overcastSky);
     if (this.flashTimer > 0) {
-      sky.lerp(new THREE.Color(0xccccff), 0.7);
+      this.skyColor.lerp(this.flashSky, 0.7);
     }
 
-    const fog = sky.clone();
+    this.fogColor.copy(this.skyColor);
     const ambient = night ? 0.25 : 0.55;
-    const sunIntensity = Math.max(0.1, sun) * (this.type === WeatherType.CLEAR ? 0.85 : 0.45);
+    const sunIntensity = Math.max(0.1, sun) * (precipIntensity < 0.2 ? 0.85 : 0.45);
 
     let timeLabel = night ? 'Night' : 'Day';
     if (sun > 0 && sun < 0.25 && !night) timeLabel = 'Sunset';
     if (sun > 0 && sun < 0.25 && night) timeLabel = 'Sunrise';
 
+    const activeType = this.weatherBlend >= 1 ? this.type : this.targetType;
+
     return {
-      skyColor: sky,
-      fogColor: fog,
+      skyColor: this.skyColor,
+      fogColor: this.fogColor,
       ambientIntensity: ambient + (this.flashTimer > 0 ? 0.5 : 0),
       sunIntensity,
       isNight: night,
       timeLabel,
-      weatherLabel: WEATHER_LABELS[this.type],
+      weatherLabel: WEATHER_LABELS[activeType],
       dayTime: this.dayTime,
     };
   }

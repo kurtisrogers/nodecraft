@@ -29,7 +29,7 @@ export function isMobileDevice() {
   return coarsePointer || (touchCapable && narrowScreen) || mobileUa;
 }
 
-export const BUILD_VERSION = '1.5.2';
+export const BUILD_VERSION = '1.5.3';
 
 const CHUNK_BLOCKS = 16;
 

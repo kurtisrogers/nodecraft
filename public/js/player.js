@@ -12,8 +12,6 @@ const MOUSE_SENSITIVITY = 0.002;
 const PLAYER_HEIGHT = 1.7;
 const PLAYER_WIDTH = 0.6;
 const EYE_HEIGHT = PLAYER_HEIGHT - 0.2;
-const STEP_HEIGHT = 0.6;
-const MAX_DEPENETRATION = 12;
 
 export class Player {
   constructor(camera, world) {
@@ -39,6 +37,8 @@ export class Player {
     this.touchJump = false;
     this.touchSprint = false;
     this.lavaDamageTimer = 0;
+    this._headPos = new THREE.Vector3();
+    this._lookTarget = new THREE.Vector3();
   }
 
   spawn() {
@@ -52,16 +52,17 @@ export class Player {
 
   ensureVolumeClear() {
     const half = PLAYER_WIDTH / 2;
-    for (let i = 0; i < MAX_DEPENETRATION; i++) {
+    for (let i = 0; i < 6; i++) {
       if (this.world.isVolumeClear(this.position.x, this.position.y, this.position.z, half, PLAYER_HEIGHT)) {
         return;
       }
-      this.resolvePenetration(half);
-      this.position.y += 0.05;
+      if (!this.resolvePenetration(half)) {
+        this.position.y += 1;
+      }
     }
   }
 
-  isPointBlocked(x, y, z, radius = 0.2) {
+  isPointBlocked(x, y, z, radius = 0.12) {
     const minX = Math.floor(x - radius);
     const maxX = Math.floor(x + radius);
     const minY = Math.floor(y - radius);
@@ -72,7 +73,7 @@ export class Player {
     for (let bx = minX; bx <= maxX; bx++) {
       for (let by = minY; by <= maxY; by++) {
         for (let bz = minZ; bz <= maxZ; bz++) {
-          if (isSolid(this.world.getBlock(bx, by, bz))) return true;
+          if (isSolid(this.world.peekBlock(bx, by, bz))) return true;
         }
       }
     }
@@ -161,33 +162,32 @@ export class Player {
   }
 
   updateCamera() {
-    const desiredEye = this.position.clone();
-    desiredEye.y += EYE_HEIGHT;
+    const feet = this.position;
+    const head = this._headPos;
+    head.set(feet.x, feet.y + EYE_HEIGHT, feet.z);
 
-    const eye = desiredEye.clone();
-    if (this.isPointBlocked(eye.x, eye.y, eye.z)) {
-      let found = false;
-      for (let lift = 0.1; lift <= PLAYER_HEIGHT; lift += 0.1) {
-        const test = this.position.clone();
-        test.y += lift;
-        if (!this.isPointBlocked(test.x, test.y, test.z)) {
-          eye.copy(test);
-          found = true;
+    if (this.isPointBlocked(head.x, head.y, head.z)) {
+      let placed = false;
+      for (let t = 0.85; t >= 0.3; t -= 0.1) {
+        head.set(feet.x, feet.y + EYE_HEIGHT * t, feet.z);
+        if (!this.isPointBlocked(head.x, head.y, head.z)) {
+          placed = true;
           break;
         }
       }
-      if (!found) {
-        eye.lerp(this.position, 0.35);
+      if (!placed) {
+        head.set(feet.x, feet.y + 0.45, feet.z);
       }
     }
 
-    this.camera.position.copy(eye);
+    this.camera.position.copy(head);
     const lookDir = new THREE.Vector3(
       -Math.sin(this.yaw) * Math.cos(this.pitch),
       Math.sin(this.pitch),
       -Math.cos(this.yaw) * Math.cos(this.pitch)
     );
-    this.camera.lookAt(this.camera.position.clone().add(lookDir));
+    this._lookTarget.copy(head).add(lookDir);
+    this.camera.lookAt(this._lookTarget);
   }
 
   getLookDirection() {
@@ -343,54 +343,19 @@ export class Player {
   moveWithCollision(dt) {
     const half = PLAYER_WIDTH / 2;
 
-    for (let i = 0; i < MAX_DEPENETRATION; i++) {
-      if (!this.resolvePenetration(half)) break;
+    if (!this.world.isVolumeClear(this.position.x, this.position.y, this.position.z, half, PLAYER_HEIGHT)) {
+      for (let i = 0; i < 4 && this.resolvePenetration(half); i++) {}
     }
 
-    this.moveAxisWithStep('x', half, dt);
-    this.moveAxisWithStep('z', half, dt);
+    this.position.x += this.velocity.x * dt;
+    this.collideAxis('x', half);
+
+    this.position.z += this.velocity.z * dt;
+    this.collideAxis('z', half);
 
     this.position.y += this.velocity.y * dt;
     this.onGround = false;
     this.collideAxis('y', half);
-  }
-
-  moveAxisWithStep(axis, half, dt) {
-    const velocity = axis === 'x' ? this.velocity.x : this.velocity.z;
-    const delta = velocity * dt;
-    if (delta === 0) return;
-
-    const wasOnGround = this.onGround;
-    const startPos = this.position.clone();
-
-    const applyMove = (yLift) => {
-      this.position.copy(startPos);
-      this.position.y += yLift;
-      if (axis === 'x') {
-        this.velocity.x = velocity;
-        this.position.x += delta;
-        return this.collideAxis('x', half);
-      }
-      this.velocity.z = velocity;
-      this.position.z += delta;
-      return this.collideAxis('z', half);
-    };
-
-    const hit = applyMove(0);
-    if (!hit) return;
-
-    if (wasOnGround && !applyMove(STEP_HEIGHT)) return;
-
-    this.position.copy(startPos);
-    if (axis === 'x') {
-      this.velocity.x = velocity;
-      this.position.x += delta;
-      this.collideAxis('x', half);
-    } else {
-      this.velocity.z = velocity;
-      this.position.z += delta;
-      this.collideAxis('z', half);
-    }
   }
 
   resolvePenetration(half) {
@@ -404,7 +369,7 @@ export class Player {
     for (let x = minX; x <= maxX; x++) {
       for (let y = minY; y <= maxY; y++) {
         for (let z = minZ; z <= maxZ; z++) {
-          if (!isSolid(this.world.getBlock(x, y, z))) continue;
+          if (!isSolid(this.world.peekBlock(x, y, z))) continue;
 
           const overlapLeft = (this.position.x + half) - x;
           const overlapRight = (x + 1) - (this.position.x - half);
@@ -451,7 +416,7 @@ export class Player {
     for (let x = minX; x <= maxX; x++) {
       for (let y = minY; y <= maxY; y++) {
         for (let z = minZ; z <= maxZ; z++) {
-          if (!isSolid(this.world.getBlock(x, y, z))) continue;
+          if (!isSolid(this.world.peekBlock(x, y, z))) continue;
 
           if (axis === 'x') {
             if (this.velocity.x > 0) this.position.x = x - half - 0.001;
@@ -472,10 +437,9 @@ export class Player {
             } else continue;
             this.velocity.y = 0;
           }
-          return true;
+          return;
         }
       }
     }
-    return false;
   }
 }
