@@ -255,6 +255,17 @@ fn try_step_up(
     }
 
     let saved = *pos;
+    let mut flat = saved;
+    flat.x += wish_x;
+    resolve_axis(world, &mut flat, aabb, 0, wish_x.signum());
+    flat.z += wish_z;
+    resolve_axis(world, &mut flat, aabb, 2, wish_z.signum());
+
+    // Flat path is clear — let the main movement loop handle it.
+    if !overlaps_solid(world, flat, aabb) {
+        return;
+    }
+
     let raised = saved + Vec3::new(0.0, STEP, 0.0);
     if overlaps_solid(world, raised, aabb) {
         return;
@@ -410,7 +421,7 @@ pub fn snap_feet_to_floor(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
         return;
     };
     let target = floor + SKIN;
-    if (pos.y - target).abs() < 0.35 {
+    if pos.y < target && (target - pos.y) < 0.08 {
         pos.y = target;
     }
 }
@@ -528,6 +539,26 @@ mod tests {
         ensure_clear(&mut world, &mut pos, aabb);
         assert!(!overlaps_solid(&mut world, pos, aabb));
         assert!(pos.y >= 2.0 - 0.1);
+    }
+
+    #[test]
+    fn flat_walk_does_not_bounce() {
+        let mut world = test_platform();
+        let aabb = Aabb::from_uniform(0.3, 1.7);
+        let mut pos = Vec3::new(0.5, 1.0, 0.5);
+        let mut vel = Vec3::new(4.0, 0.0, 0.0);
+        let start_y = pos.y;
+        for _ in 0..60 {
+            move_aabb(&mut world, &mut pos, &mut vel, aabb, 0.05, true);
+            vel.x = 4.0;
+            vel.y = 0.0;
+            vel.z = 0.0;
+        }
+        assert!(
+            (pos.y - start_y).abs() < 0.05,
+            "walking on flat ground should not change height, y={}",
+            pos.y
+        );
     }
 
     #[test]
