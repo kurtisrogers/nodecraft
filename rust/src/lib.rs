@@ -19,6 +19,7 @@ mod world_gen;
 
 use bevy::prelude::*;
 use bevy::window::PresentMode;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy_egui::EguiPlugin;
 use chunk_material::{VoxelChunkMaterial, VoxelChunkMaterialPlugin};
 use config::{DEFAULT_SEED, WASM_BOOT_CHUNK_RADIUS, WASM_RENDER_DISTANCE};
@@ -36,7 +37,9 @@ use player::{
     mouse_look, player_movement, spawn_player, sync_camera, toggle_inventory, update_terrain_ready,
     PlayerState,
 };
-use ui::{draw_hud, setup_fog, update_fps, HudState};
+use ui::{setup_fog, update_fps, HudState};
+#[cfg(not(target_arch = "wasm32"))]
+use ui::draw_hud;
 use weather::{MoonLight, SunLight, update_day_night, update_lights};
 use inventory::GameInventory;
 use clouds::{setup_clouds, update_clouds};
@@ -80,6 +83,7 @@ pub fn run() {
     .add_plugins(VoxelChunkMaterialPlugin)
     .insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)));
     if !wasm {
+        #[cfg(not(target_arch = "wasm32"))]
         app.add_plugins(EguiPlugin);
     }
     app
@@ -94,15 +98,18 @@ pub fn run() {
     .insert_resource(mobs::MobManager::default())
     .add_systems(Startup, (
         setup_scene,
-        setup_sky,
-        setup_clouds,
         setup_fog,
         spawn_player,
         init_world,
         bootstrap_player_meshes,
         init_mobile,
         finish_wasm_startup,
-    ))
+    ));
+    #[cfg(not(target_arch = "wasm32"))]
+    if !wasm {
+        app.add_systems(Startup, (setup_sky, setup_clouds));
+    }
+    app
     .add_systems(
         Update,
         (
@@ -127,19 +134,20 @@ pub fn run() {
     .add_systems(
         Update,
         (
-            mob_spawner,
-            mob_ai,
             update_world_chunks,
             sync_chunk_meshes,
             update_terrain_ready,
             update_day_night,
             update_lights,
-            update_sky,
-            update_clouds,
             update_fps,
         ),
     );
+    #[cfg(not(target_arch = "wasm32"))]
     if !wasm {
+        app.add_systems(Update, (mob_spawner, mob_ai, update_sky, update_clouds));
+    }
+    if !wasm {
+        #[cfg(not(target_arch = "wasm32"))]
         app.add_systems(Update, draw_hud);
     }
 

@@ -65,6 +65,34 @@
       font-size: 1rem;
       cursor: pointer;
     }
+    #loading.hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+    #loading.compact {
+      inset: auto 0 auto 0;
+      top: 0;
+      height: auto;
+      min-height: 0;
+      padding: 10px 14px;
+      flex-direction: column;
+      align-items: stretch;
+      background: rgba(13, 27, 42, 0.94);
+      z-index: 40;
+    }
+    #loading.compact h1,
+    #loading.compact p:nth-of-type(2),
+    #loading.compact p:nth-of-type(3) { display: none; }
+    #loading.compact .loading-detail { font-size: 0.85rem; margin: 0; max-width: none; }
+    #loading-spinner {
+      display: none;
+      width: 28px;
+      height: 28px;
+      border: 3px solid rgba(255, 255, 255, 0.25);
+      border-top-color: #a5d6a7;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 0 auto 8px;
+    }
+    #loading.compact #loading-spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     #mobile-controls {
       position: fixed;
@@ -237,16 +265,17 @@
       pointer-events: auto;
     }
   </style>
-  <link data-trunk rel="rust" href="Cargo.toml" />
+  <link data-trunk rel="rust" href="Cargo.toml" data-wasm-opt="z" />
 </head>
 <body>
   <div id="debug-status">chunks: 0</div>
   <div id="loading">
+    <div id="loading-spinner" aria-hidden="true"></div>
     <h1>Nodecraft</h1>
     <p>Rust + Bevy</p>
     <p>Loading WASM…</p>
-    <p id="loading-status" class="loading-detail">First visit downloads ~18MB</p>
-    <button id="loading-dismiss" type="button" hidden>Tap to continue</button>
+    <p id="loading-status" class="loading-detail">First visit downloads ~5MB, then compiles on your phone (1–3 min)</p>
+    <button id="loading-dismiss" type="button" hidden>Game ready — tap to play</button>
   </div>
   <canvas id="canvas"></canvas>
 
@@ -291,47 +320,79 @@
         if (el) el.textContent = text;
       }
 
-      function showDismissButton() {
-        const btn = document.getElementById('loading-dismiss');
-        if (!btn || !btn.hidden) return;
-        btn.hidden = false;
-        btn.addEventListener('click', () => {
-          hideLoadingOverlay();
-        });
+      function formatElapsed(ms) {
+        const sec = Math.floor(ms / 1000);
+        if (sec < 60) return `${sec}s`;
+        return `${Math.floor(sec / 60)}m ${sec % 60}s`;
       }
 
-      window.addEventListener('TrunkApplicationStarted', hideLoadingOverlay);
+      function setCompactLoading() {
+        const el = document.getElementById('loading');
+        if (el && !el.classList.contains('compact')) {
+          el.classList.add('compact');
+        }
+      }
+
+      function showDismissButton() {
+        const btn = document.getElementById('loading-dismiss');
+        if (!btn) return;
+        btn.hidden = false;
+        btn.onclick = () => hideLoadingOverlay();
+      }
+
+      window.addEventListener('TrunkApplicationStarted', () => {
+        hideLoadingOverlay();
+        document.body.classList.add('ready');
+      });
       window.addEventListener('unhandledrejection', (event) => {
         console.error('WASM load error', event.reason);
         setLoadingStatus('Load failed — tap below to retry');
-        showDismissButton();
         const btn = document.getElementById('loading-dismiss');
         if (btn) {
+          btn.hidden = false;
           btn.textContent = 'Tap to reload';
           btn.onclick = () => location.reload();
         }
       });
+      window.addEventListener('error', (event) => {
+        if (String(event.filename || '').includes('nodecraft')) {
+          setLoadingStatus('Script error — tap below to reload');
+          const btn = document.getElementById('loading-dismiss');
+          if (btn) {
+            btn.hidden = false;
+            btn.textContent = 'Tap to reload';
+            btn.onclick = () => location.reload();
+          }
+        }
+      });
 
-      // Dismiss as soon as wasm-bindgen exports are available.
       const wasmReadyPoll = setInterval(() => {
         if (window.wasmBindings) {
           hideLoadingOverlay();
+          document.body.classList.add('ready');
           clearInterval(wasmReadyPoll);
         }
       }, 200);
 
-      // Progressive status while the ~18MB binary downloads/compiles on mobile.
-      setTimeout(() => setLoadingStatus('Downloading game data (~18MB)…'), 3000);
-      setTimeout(() => setLoadingStatus('Compiling on your device… this can take a minute'), 15000);
-      setTimeout(() => {
-        setLoadingStatus('Still working… you can tap below to check if the game loaded');
-        showDismissButton();
-      }, 35000);
-      setTimeout(() => {
-        if (!document.getElementById('loading')?.classList.contains('hidden')) {
-          setLoadingStatus(`Still loading after ${Math.round((Date.now() - loadStarted) / 1000)}s — try Wi‑Fi or tap below`);
+      const elapsedPoll = setInterval(() => {
+        const elapsed = formatElapsed(Date.now() - loadStarted);
+        if (!window.wasmBindings) {
+          setLoadingStatus(`Compiling game engine… ${elapsed} (keep tab open, screen on)`);
+        } else {
+          clearInterval(elapsedPoll);
         }
-      }, 60000);
+      }, 1000);
+
+      setTimeout(() => setLoadingStatus('Downloading game (~5MB compressed)…'), 2000);
+      setTimeout(() => {
+        setCompactLoading();
+        setLoadingStatus(`Compiling on your phone… ${formatElapsed(Date.now() - loadStarted)}`);
+      }, 8000);
+      setTimeout(() => {
+        if (!window.wasmBindings) {
+          setLoadingStatus(`Still compiling… ${formatElapsed(Date.now() - loadStarted)} — this is normal on phones`);
+        }
+      }, 45000);
 
       if (new URLSearchParams(location.search).has('debug')) {
         document.body.classList.add('debug');
