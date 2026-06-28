@@ -5,6 +5,7 @@ pub const SEA_LEVEL: i32 = 30;
 pub const DEFAULT_SEED: u32 = 42;
 pub const RENDER_DISTANCE: i32 = 7;
 pub const WASM_RENDER_DISTANCE: i32 = 5;
+pub const WASM_BOOT_CHUNK_RADIUS: i32 = 2;
 pub const DAY_LENGTH_SECS: f32 = 240.0;
 pub const FOG_START: f32 = 56.0;
 pub const FOG_END: f32 = 140.0;

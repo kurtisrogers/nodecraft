@@ -249,8 +249,22 @@
   </div>
 
   <script>
-    (function () {
+      (function () {
       const TOUCH_LOOK_SENSITIVITY = 0.004;
+
+      function hideLoadingOverlay() {
+        const el = document.getElementById('loading');
+        if (el) el.classList.add('hidden');
+      }
+
+      window.addEventListener('TrunkApplicationStarted', hideLoadingOverlay);
+      setTimeout(() => {
+        const el = document.getElementById('loading');
+        if (el && !el.classList.contains('hidden')) {
+          const status = el.querySelector('p:last-child');
+          if (status) status.textContent = 'Still loading… first visit downloads ~20MB';
+        }
+      }, 20000);
 
       function isMobileDevice() {
         if (new URLSearchParams(location.search).has('mobile')) return true;
