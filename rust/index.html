@@ -37,7 +37,21 @@
       z-index: 30;
       transition: opacity 0.4s;
     }
-    #loading.hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+    #debug-status {
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      left: 8px;
+      z-index: 40;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font-size: 12px;
+      font-family: monospace;
+      pointer-events: none;
+      display: none;
+    }
+    body.debug #debug-status { display: block; }
     #loading h1 { margin: 0 0 0.5rem; font-size: 2rem; }
     #loading p { margin: 0.25rem; opacity: 0.85; }
 
@@ -215,6 +229,7 @@
   <link data-trunk rel="rust" href="Cargo.toml" />
 </head>
 <body>
+  <div id="debug-status">chunks: 0</div>
   <div id="loading">
     <h1>Nodecraft</h1>
     <p>Rust + Bevy</p>
@@ -265,6 +280,18 @@
           if (status) status.textContent = 'Still loading… first visit downloads ~20MB';
         }
       }, 20000);
+
+      if (new URLSearchParams(location.search).has('debug')) {
+        document.body.classList.add('debug');
+        const debugEl = document.getElementById('debug-status');
+        setInterval(() => {
+          const api = window.wasmBindings;
+          const count = api && typeof api.nc_chunk_mesh_count === 'function'
+            ? api.nc_chunk_mesh_count()
+            : 0;
+          if (debugEl) debugEl.textContent = `chunks: ${count}`;
+        }, 1000);
+      }
 
       function isMobileDevice() {
         if (new URLSearchParams(location.search).has('mobile')) return true;

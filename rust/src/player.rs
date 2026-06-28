@@ -9,6 +9,7 @@ use crate::meshing::{ChunkMesh, RemeshQueue, VoxelWorldResource};
 use crate::mobile::{is_controlling, MobileInput};
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
+use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::render::view::Msaa;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_pbr::{DistanceFog, FogFalloff};
@@ -89,8 +90,12 @@ pub fn spawn_player(
         PlayerCamera,
     ));
     if cfg!(target_arch = "wasm32") {
-        // MSAA and distance fog are unreliable on mobile WebGL2; keep the path simple.
-        camera.insert(Msaa::Off);
+        // MSAA, tonemapping LUTs, and distance fog are unreliable on mobile WebGL2.
+        camera.insert((
+            Msaa::Off,
+            Tonemapping::None,
+            DebandDither::Disabled,
+        ));
     } else {
         camera.insert((
             DistanceFog {

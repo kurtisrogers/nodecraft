@@ -1,3 +1,4 @@
+mod chunk_material;
 mod blocks;
 mod chunk_gen;
 mod collision;
@@ -16,9 +17,11 @@ mod weather;
 mod world;
 mod world_gen;
 
+use bevy::pbr::MaterialPlugin;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
+use chunk_material::{load_voxel_chunk_shader, VoxelChunkMaterial};
 use config::{DEFAULT_SEED, WASM_BOOT_CHUNK_RADIUS, WASM_RENDER_DISTANCE};
 use meshing::{
     bootstrap_player_meshes, sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial,
@@ -49,6 +52,7 @@ pub fn run() {
     };
 
     let mut app = App::new();
+    load_voxel_chunk_shader(&mut app);
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -75,6 +79,7 @@ pub fn run() {
                 ..default()
             }),
     )
+    .add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default())
     .insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)));
     if !wasm {
         app.add_plugins(EguiPlugin);
@@ -158,7 +163,7 @@ fn dismiss_loading_screen_once(mut dismissed: Local<bool>) {
 
 fn setup_scene(
     mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<VoxelChunkMaterial>>,
 ) {
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.85, 0.88, 0.92),
@@ -183,16 +188,7 @@ fn setup_scene(
         Transform::from_rotation(Quat::from_rotation_x(std::f32::consts::PI)),
     ));
 
-  let mat = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 1.0,
-        metallic: 0.0,
-        // Unlit vertex colors match native and are reliable on mobile WebGL2.
-        unlit: true,
-        fog_enabled: false,
-        double_sided: cfg!(target_arch = "wasm32"),
-        ..default()
-    });
+    let mat = materials.add(VoxelChunkMaterial {});
     commands.insert_resource(ChunkMaterial(mat));
 }
 
@@ -233,7 +229,14 @@ fn finish_wasm_startup() {
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm_entry {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use wasm_bindgen::prelude::*;
+
+    static CHUNK_MESH_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    pub(crate) fn set_chunk_mesh_count(count: usize) {
+        CHUNK_MESH_COUNT.store(count, Ordering::Relaxed);
+    }
 
     fn hide_loading_overlay() {
         use wasm_bindgen::JsCast;
@@ -259,6 +262,11 @@ pub(crate) mod wasm_entry {
         if chunk_count > 0 {
             hide_loading_overlay();
         }
+    }
+
+    #[wasm_bindgen]
+    pub fn nc_chunk_mesh_count() -> usize {
+        CHUNK_MESH_COUNT.load(Ordering::Relaxed)
     }
 
     #[wasm_bindgen(start)]
