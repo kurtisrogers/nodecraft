@@ -143,48 +143,7 @@ pub fn run() {
         app.add_systems(Update, draw_hud);
     }
 
-    if wasm {
-        app.add_systems(Update, resize_wasm_canvas);
-    }
-
     app.run();
-}
-
-#[cfg(target_arch = "wasm32")]
-fn resize_wasm_canvas(mut last_size: Local<Option<(u32, u32)>>) {
-    use wasm_bindgen::JsCast;
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    let Ok(width) = window.inner_width() else {
-        return;
-    };
-    let Ok(height) = window.inner_height() else {
-        return;
-    };
-    let Some(width) = width.as_f64() else {
-        return;
-    };
-    let Some(height) = height.as_f64() else {
-        return;
-    };
-    let w = width.max(1.0) as u32;
-    let h = height.max(1.0) as u32;
-    if *last_size == Some((w, h)) {
-        return;
-    }
-    *last_size = Some((w, h));
-    let Some(document) = window.document() else {
-        return;
-    };
-    let Some(canvas) = document.get_element_by_id("canvas") else {
-        return;
-    };
-    let Ok(canvas) = canvas.dyn_into::<web_sys::HtmlCanvasElement>() else {
-        return;
-    };
-    canvas.set_width(w);
-    canvas.set_height(h);
 }
 
 fn setup_scene(
@@ -193,7 +152,7 @@ fn setup_scene(
 ) {
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.85, 0.88, 0.92),
-        brightness: 400.0,
+        brightness: if cfg!(target_arch = "wasm32") { 1200.0 } else { 400.0 },
     });
     commands.spawn((
         DirectionalLight {
@@ -218,7 +177,7 @@ fn setup_scene(
         base_color: Color::WHITE,
         perceptual_roughness: 1.0,
         metallic: 0.0,
-        unlit: true,
+        unlit: !cfg!(target_arch = "wasm32"),
         fog_enabled: false,
         opaque_render_method: if cfg!(target_arch = "wasm32") {
             OpaqueRendererMethod::Forward
@@ -258,7 +217,7 @@ fn init_world(
 }
 
 #[cfg(target_arch = "wasm32")]
-mod wasm_entry {
+pub(crate) mod wasm_entry {
     use wasm_bindgen::prelude::*;
 
     fn hide_loading_overlay() {
@@ -277,11 +236,16 @@ mod wasm_entry {
         }
     }
 
+    pub(crate) fn hide_loading_overlay_if_ready(chunk_count: usize) {
+        if chunk_count > 0 {
+            hide_loading_overlay();
+        }
+    }
+
     #[wasm_bindgen(start)]
     pub fn wasm_start() {
         console_error_panic_hook::set_once();
-        hide_loading_overlay();
-        // Defer Bevy so Trunk can finish init and expose window.wasmBindings.
+        // Keep the loading overlay until terrain meshes exist.
         wasm_bindgen_futures::spawn_local(async {
             super::run();
         });
