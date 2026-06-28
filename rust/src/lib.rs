@@ -20,7 +20,7 @@ use bevy::pbr::{DefaultOpaqueRendererMethod, OpaqueRendererMethod};
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
-use config::{DEFAULT_SEED, WASM_RENDER_DISTANCE};
+use config::{DEFAULT_SEED, WASM_BOOT_CHUNK_RADIUS, WASM_RENDER_DISTANCE};
 use meshing::{
     bootstrap_player_meshes, sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial,
     RemeshQueue, VoxelWorldResource,
@@ -102,6 +102,7 @@ pub fn run() {
         init_world,
         bootstrap_player_meshes,
         init_mobile,
+        finish_wasm_startup,
     ))
     .add_systems(
         Update,
@@ -207,16 +208,21 @@ fn init_world(
     mut queue: ResMut<RemeshQueue>,
     player: Res<PlayerState>,
 ) {
-    if cfg!(target_arch = "wasm32") {
-        world.inner.render_distance = WASM_RENDER_DISTANCE;
-    }
     let px = player.position.x.floor() as i32;
     let pz = player.position.z.floor() as i32;
     world.player_chunk = (
         px.div_euclid(crate::config::CHUNK_SIZE),
         pz.div_euclid(crate::config::CHUNK_SIZE),
     );
-    world.loaded_chunks = world.inner.load_chunks_around(px, pz);
+
+    if cfg!(target_arch = "wasm32") {
+        world.inner.render_distance = WASM_BOOT_CHUNK_RADIUS;
+        world.loaded_chunks = world.inner.load_chunks_around(px, pz);
+        world.inner.render_distance = WASM_RENDER_DISTANCE;
+    } else {
+        world.loaded_chunks = world.inner.load_chunks_around(px, pz);
+    }
+
     let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
     world.inner.retain_chunks(&loaded_set);
     if cfg!(not(target_arch = "wasm32")) {
@@ -225,6 +231,11 @@ fn init_world(
     for &(cx, cz) in &world.loaded_chunks.clone() {
         queue.push((cx, cz));
     }
+}
+
+fn finish_wasm_startup() {
+    #[cfg(target_arch = "wasm32")]
+    wasm_entry::dismiss_loading_screen();
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -260,7 +271,7 @@ pub(crate) mod wasm_entry {
     #[wasm_bindgen(start)]
     pub fn wasm_start() {
         console_error_panic_hook::set_once();
-        // Keep the loading overlay until terrain meshes exist.
+        dismiss_loading_screen();
         wasm_bindgen_futures::spawn_local(async {
             super::run();
         });

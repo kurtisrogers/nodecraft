@@ -402,20 +402,22 @@ pub fn update_world_chunks(
     mut world: ResMut<VoxelWorldResource>,
     mut queue: ResMut<RemeshQueue>,
     player: Res<PlayerState>,
-    mut wasm_settlements: Local<bool>,
+    mut wasm_boot: Local<bool>,
 ) {
     let px = player.position.x.floor() as i32;
     let pz = player.position.z.floor() as i32;
 
     #[cfg(target_arch = "wasm32")]
-    if !*wasm_settlements {
-        *wasm_settlements = true;
-        crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 96);
-        for &(cx, cz) in &world.loaded_chunks.clone() {
-            if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
-                chunk.dirty = true;
+    if !*wasm_boot {
+        *wasm_boot = true;
+        let previous: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
+        world.loaded_chunks = world.inner.load_chunks_around(px, pz);
+        let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
+        world.inner.retain_chunks(&loaded_set);
+        for &(cx, cz) in &world.loaded_chunks {
+            if !previous.contains(&(cx, cz)) {
+                queue.push((cx, cz));
             }
-            queue.push((cx, cz));
         }
     }
 
@@ -457,7 +459,7 @@ pub fn bootstrap_player_meshes(
     mut queue: ResMut<RemeshQueue>,
 ) {
     let (pcx, pcz) = world.player_chunk;
-    let radius = if cfg!(target_arch = "wasm32") { 2 } else { 1 };
+    let radius = if cfg!(target_arch = "wasm32") { 1 } else { 1 };
     for dx in -radius..=radius {
         for dz in -radius..=radius {
             mesh_chunk_entity(

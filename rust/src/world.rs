@@ -196,6 +196,12 @@ impl VoxelWorld {
             .unwrap_or((0.5, 40.0, 0.5))
     }
 
+    /// Fast spawn for WASM/mobile boot — skips villages and wide search.
+    pub fn find_quick_spawn(&mut self, preferred_x: i32, preferred_z: i32) -> (f32, f32, f32) {
+        self.find_spawn_in_area(preferred_x, preferred_z, 12)
+            .unwrap_or((0.5, 40.0, 0.5))
+    }
+
     fn find_spawn_in_area(&mut self, preferred_x: i32, preferred_z: i32, max_radius: i32) -> Option<(f32, f32, f32)> {
         let mut best: Option<(i32, i32, i32, i32)> = None;
         for r in (0..=max_radius).step_by(2) {
