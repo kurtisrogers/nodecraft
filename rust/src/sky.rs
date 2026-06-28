@@ -37,9 +37,8 @@ pub fn setup_sky(
 
     let star_material = materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 1.0, 1.0, 0.9),
-        emissive: LinearRgba::new(0.9, 0.9, 1.0, 1.0),
+        emissive: LinearRgba::new(0.8, 0.8, 0.9, 1.0),
         unlit: true,
-        alpha_mode: AlphaMode::Add,
         ..default()
     });
     commands.spawn((

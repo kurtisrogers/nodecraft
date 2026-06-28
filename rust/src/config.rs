@@ -4,12 +4,12 @@ pub const WORLD_HEIGHT: i32 = 64;
 pub const SEA_LEVEL: i32 = 30;
 pub const DEFAULT_SEED: u32 = 42;
 pub const RENDER_DISTANCE: i32 = 7;
-pub const WASM_RENDER_DISTANCE: i32 = 4;
+pub const WASM_RENDER_DISTANCE: i32 = 5;
 pub const DAY_LENGTH_SECS: f32 = 240.0;
 pub const FOG_START: f32 = 56.0;
 pub const FOG_END: f32 = 140.0;
-pub const WASM_FOG_START: f32 = 28.0;
-pub const WASM_FOG_END: f32 = 72.0;
+pub const WASM_FOG_START: f32 = 44.0;
+pub const WASM_FOG_END: f32 = 120.0;
 
 pub const GRAVITY: f32 = -28.0;
 pub const JUMP_VELOCITY: f32 = 10.0;
