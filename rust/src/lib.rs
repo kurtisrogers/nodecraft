@@ -8,6 +8,7 @@ mod mobile;
 mod mobs;
 mod noise;
 mod player;
+mod clouds;
 mod sky;
 mod structures;
 mod ui;
@@ -34,8 +35,9 @@ use player::{
     PlayerState,
 };
 use ui::{draw_hud, setup_fog, update_fps, HudState};
-use weather::{update_day_night, update_lights};
+use weather::{MoonLight, SunLight, update_day_night, update_lights};
 use inventory::GameInventory;
+use clouds::{setup_clouds, update_clouds};
 use sky::{setup_sky, update_sky};
 
 pub fn run() {
@@ -84,7 +86,7 @@ pub fn run() {
     .insert_resource(MobileInput::default())
     .insert_resource(weather::DayNight::default())
     .insert_resource(mobs::MobManager::default())
-    .add_systems(Startup, (setup_scene, setup_sky, setup_fog, spawn_player, init_world, bootstrap_player_meshes, init_mobile))
+    .add_systems(Startup, (setup_scene, setup_sky, setup_clouds, setup_fog, spawn_player, init_world, bootstrap_player_meshes, init_mobile))
     .add_systems(
         Update,
         (
@@ -117,6 +119,7 @@ pub fn run() {
             update_day_night,
             update_lights,
             update_sky,
+            update_clouds,
             update_fps,
             draw_hud,
         ),
@@ -139,7 +142,17 @@ fn setup_scene(
             shadows_enabled: !cfg!(target_arch = "wasm32"),
             ..default()
         },
+        SunLight,
         Transform::from_xyz(50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 0.0,
+            shadows_enabled: false,
+            ..default()
+        },
+        MoonLight,
+        Transform::from_rotation(Quat::from_rotation_x(std::f32::consts::PI)),
     ));
 
     let mat = materials.add(StandardMaterial {
