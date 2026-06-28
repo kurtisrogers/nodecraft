@@ -33,20 +33,24 @@ pub fn draw_hud(
     mobile: Res<MobileInput>,
 ) {
     let ctx = contexts.ctx_mut();
+    let hud_color = egui::Color32::from_rgb(235, 235, 245);
 
     egui::Area::new(egui::Id::new("hud_top"))
         .fixed_pos(egui::pos2(10.0, 10.0))
         .show(ctx, |ui| {
-            ui.label(format!("Nodecraft Rust {BUILD_VERSION}"));
-            ui.label(format!("{:.0} FPS", hud.fps));
-            ui.label(format!(
-                "{:.0}, {:.0}, {:.0}",
-                player.position.x, player.position.y, player.position.z
-            ));
-            ui.label(format!("Health: {}/20", player.health));
-            ui.label(format!("Mobs nearby: {}", mobs.count));
+            ui.colored_label(hud_color, format!("Nodecraft Rust {BUILD_VERSION}"));
+            ui.colored_label(hud_color, format!("{:.0} FPS", hud.fps));
+            ui.colored_label(
+                hud_color,
+                format!(
+                    "{:.0}, {:.0}, {:.0}",
+                    player.position.x, player.position.y, player.position.z
+                ),
+            );
+            ui.colored_label(hud_color, format!("Health: {}/20", player.health));
+            ui.colored_label(hud_color, format!("Mobs nearby: {}", mobs.count));
             let cycle = (day.time % crate::config::DAY_LENGTH_SECS) / crate::config::DAY_LENGTH_SECS;
-            ui.label(if cycle > 0.5 { "Night" } else { "Day" });
+            ui.colored_label(hud_color, if cycle > 0.5 { "Night" } else { "Day" });
         });
 
     egui::Area::new(egui::Id::new("hotbar"))

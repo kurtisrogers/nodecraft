@@ -68,6 +68,11 @@ pub fn spawn_player(
 
     commands.spawn((
         Camera3d::default(),
+        Projection::Perspective(PerspectiveProjection {
+            far: 512.0,
+            near: 0.05,
+            ..default()
+        }),
         Transform::from_translation(player.position + Vec3::Y * EYE_HEIGHT),
         PlayerCamera,
         DistanceFog {
@@ -488,7 +493,7 @@ pub fn update_terrain_ready(
         .iter()
         .filter(|mesh| (mesh.chunk_x - pcx).abs() <= 1 && (mesh.chunk_z - pcz).abs() <= 1)
         .count();
-    if meshed_near < 5 {
+    if meshed_near < 1 {
         return;
     }
     player.terrain_ready = true;

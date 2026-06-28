@@ -148,6 +148,10 @@ impl VoxelWorld {
         loaded
     }
 
+    pub fn retain_chunks(&mut self, keep: &std::collections::HashSet<(i32, i32)>) {
+        self.chunks.retain(|key, _| keep.contains(key));
+    }
+
     pub fn unload_distant_chunks(&mut self, world_x: i32, world_z: i32) {
         let center_x = world_x.div_euclid(CHUNK_SIZE);
         let center_z = world_z.div_euclid(CHUNK_SIZE);

@@ -397,7 +397,8 @@ pub fn update_world_chunks(
         crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, radius);
         let previous: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
         world.loaded_chunks = world.inner.load_chunks_around(px, pz);
-        world.inner.unload_distant_chunks(px, pz);
+        let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
+        world.inner.retain_chunks(&loaded_set);
         let new_chunks: Vec<_> = world
             .loaded_chunks
             .iter()
@@ -413,6 +414,52 @@ pub fn update_world_chunks(
                     queue.push(neighbor);
                 }
             }
+        }
+    }
+}
+
+/// Immediately mesh the 3×3 chunks around the player so the world is visible on frame 1.
+pub fn bootstrap_player_meshes(
+    mut commands: Commands,
+    mut world: ResMut<VoxelWorldResource>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    chunk_mat: Res<ChunkMaterial>,
+    mut entity_map: ResMut<ChunkEntityMap>,
+    mut queue: ResMut<RemeshQueue>,
+) {
+    let (pcx, pcz) = world.player_chunk;
+    for dx in -1i32..=1 {
+        for dz in -1i32..=1 {
+            let cx = pcx + dx;
+            let cz = pcz + dz;
+            if !world.loaded_chunks.contains(&(cx, cz)) {
+                continue;
+            }
+            let Some(mesh) = build_chunk_mesh(&world.inner, cx, cz) else {
+                continue;
+            };
+            if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
+                chunk.dirty = false;
+            }
+            let handle = meshes.add(mesh);
+            if let Some(&entity) = entity_map.entities.get(&(cx, cz)) {
+                commands.entity(entity).insert(Mesh3d(handle));
+            } else {
+                let entity = commands
+                    .spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(chunk_mat.0.clone()),
+                        Transform::from_xyz(
+                            (cx * CHUNK_SIZE) as f32,
+                            0.0,
+                            (cz * CHUNK_SIZE) as f32,
+                        ),
+                        ChunkMesh { chunk_x: cx, chunk_z: cz },
+                    ))
+                    .id();
+                entity_map.entities.insert((cx, cz), entity);
+            }
+            queue.push((cx, cz));
         }
     }
 }

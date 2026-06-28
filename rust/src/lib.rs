@@ -19,7 +19,10 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
 use config::{DEFAULT_SEED, WASM_RENDER_DISTANCE};
-use meshing::{sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial, RemeshQueue, VoxelWorldResource};
+use meshing::{
+    bootstrap_player_meshes, sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial,
+    RemeshQueue, VoxelWorldResource,
+};
 use mobile::{
     clear_mobile_frame, init_mobile, notify_mobile_ui_ready, sync_mobile_hotbar_ui, sync_mobile_input,
     sync_mobile_menu_class, MobileInput,
@@ -81,7 +84,7 @@ pub fn run() {
     .insert_resource(MobileInput::default())
     .insert_resource(weather::DayNight::default())
     .insert_resource(mobs::MobManager::default())
-    .add_systems(Startup, (setup_scene, setup_sky, setup_fog, spawn_player, init_world, init_mobile))
+    .add_systems(Startup, (setup_scene, setup_sky, setup_fog, spawn_player, init_world, bootstrap_player_meshes, init_mobile))
     .add_systems(
         Update,
         (
@@ -164,7 +167,13 @@ fn init_world(
         pz.div_euclid(crate::config::CHUNK_SIZE),
     );
     world.loaded_chunks = world.inner.load_chunks_around(px, pz);
-    crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
+    let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
+    world.inner.retain_chunks(&loaded_set);
+    if cfg!(target_arch = "wasm32") {
+        crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 96);
+    } else {
+        crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
+    }
     for &(cx, cz) in &world.loaded_chunks.clone() {
         queue.push((cx, cz));
     }
