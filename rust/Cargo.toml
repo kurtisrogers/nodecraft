@@ -81,6 +81,6 @@ codegen-units = 1
 
 [profile.wasm-release]
 inherits = "release"
-opt-level = "s"
+opt-level = "z"
 lto = true
 codegen-units = 1

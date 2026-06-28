@@ -2,6 +2,7 @@
 public_url = "/nodecraft/"
 dist = "dist"
 no_spa = true
+cargo_profile = "wasm-release"
 
 [serve]
 port = 8080

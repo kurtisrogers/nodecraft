@@ -39,7 +39,7 @@ jobs:
 
       - name: Build Rust WASM
         working-directory: rust
-        run: env -u NO_COLOR trunk build --release --public-url /nodecraft/ --no-default-features
+        run: env -u NO_COLOR trunk build --release --public-url /nodecraft/ --no-default-features --cargo-profile wasm-release
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
