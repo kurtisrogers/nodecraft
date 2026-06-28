@@ -72,8 +72,12 @@ pub fn flatten_area(world: &mut VoxelWorld, center_x: i32, center_z: i32, radius
                 continue;
             }
 
+            let blend = 1.0 - (dist / radius as f32).powf(1.5);
+            let local_target = (target_y as f32 * blend + world.noise.terrain_height(wx, wz) as f32 * (1.0 - blend))
+                .round() as i32;
+
             for y in 0..WORLD_HEIGHT {
-                if y < target_y {
+                if y < local_target {
                     let cur = world.peek_block(wx, y, wz);
                     if matches!(
                         cur,
@@ -85,15 +89,17 @@ pub fn flatten_area(world: &mut VoxelWorld, center_x: i32, center_z: i32, radius
                             | BlockId::Wheat
                     ) {
                         world.set_block(wx, y, wz, BlockId::Dirt);
+                    } else if cur == BlockId::Stone {
+                        world.set_block(wx, y, wz, BlockId::Dirt);
                     }
-                } else if y == target_y {
+                } else if y == local_target {
                     let cur = world.peek_block(wx, y, wz);
                     if cur != BlockId::Water && cur != BlockId::Lava {
                         world.set_block(wx, y, wz, BlockId::Grass);
                     }
-                } else {
+                } else if y > local_target {
                     let cur = world.peek_block(wx, y, wz);
-                    if cur != BlockId::Air && cur != BlockId::Water && cur != BlockId::Lava {
+                    if cur.solid() && cur != BlockId::Water && cur != BlockId::Lava {
                         world.set_block(wx, y, wz, BlockId::Air);
                     }
                 }
@@ -103,10 +109,11 @@ pub fn flatten_area(world: &mut VoxelWorld, center_x: i32, center_z: i32, radius
 }
 
 pub fn place_settlement(world: &mut VoxelWorld, center_x: i32, center_z: i32, surface_y: i32) {
-    flatten_area(world, center_x, center_z, 22, surface_y);
-    place_house(world, center_x - 10, surface_y + 1, center_z - 6);
-    place_house(world, center_x + 2, surface_y + 1, center_z - 8);
-    place_house(world, center_x - 4, surface_y + 1, center_z + 4);
-    place_farm_plot(world, center_x + 6, surface_y + 1, center_z + 2, 5);
-    place_farm_plot(world, center_x - 14, surface_y + 1, center_z + 4, 4);
+    let pad_y = surface_y;
+    flatten_area(world, center_x, center_z, 24, pad_y);
+    place_house(world, center_x - 10, pad_y + 1, center_z - 6);
+    place_house(world, center_x + 2, pad_y + 1, center_z - 8);
+    place_house(world, center_x - 4, pad_y + 1, center_z + 4);
+    place_farm_plot(world, center_x + 6, pad_y + 1, center_z + 2, 5);
+    place_farm_plot(world, center_x - 14, pad_y + 1, center_z + 4, 4);
 }
