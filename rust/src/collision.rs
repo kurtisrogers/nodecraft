@@ -43,7 +43,7 @@ pub struct MoveResult {
 }
 
 pub fn move_aabb(
-    world: &mut VoxelWorld,
+    world: &VoxelWorld,
     pos: &mut Vec3,
     velocity: &mut Vec3,
     aabb: Aabb,
@@ -107,7 +107,7 @@ pub fn move_aabb(
     }
 }
 
-pub fn depenetrate(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) -> bool {
+pub fn depenetrate(world: &VoxelWorld, pos: &mut Vec3, aabb: Aabb) -> bool {
     let (min, max) = aabb.bounds(*pos);
     let min_b = block_min(min);
     let max_b = block_max(max);
@@ -118,7 +118,7 @@ pub fn depenetrate(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) -> bool {
     for bx in min_b[0]..=max_b[0] {
         for by in min_b[1]..=max_b[1] {
             for bz in min_b[2]..=max_b[2] {
-                if !world.get_block(bx, by, bz).solid() {
+                if !world.peek_block(bx, by, bz).solid() {
                     continue;
                 }
                 let block_min_v = Vec3::new(bx as f32, by as f32, bz as f32);
@@ -185,7 +185,7 @@ pub fn depenetrate(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) -> bool {
     false
 }
 
-pub fn ensure_clear(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
+pub fn ensure_clear(world: &VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
     for _ in 0..10 {
         if !depenetrate(world, pos, aabb) {
             break;
@@ -203,7 +203,7 @@ pub fn ensure_clear(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
     }
 }
 
-pub fn overlaps_solid(world: &mut VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
+pub fn overlaps_solid(world: &VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
     let (min, max) = aabb.bounds(pos);
     let min_b = block_min(min);
     let max_b = block_max(max);
@@ -211,7 +211,7 @@ pub fn overlaps_solid(world: &mut VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
     for bx in min_b[0]..=max_b[0] {
         for by in min_b[1]..=max_b[1] {
             for bz in min_b[2]..=max_b[2] {
-                if world.get_block(bx, by, bz).solid() {
+                if world.peek_block(bx, by, bz).solid() {
                     return true;
                 }
             }
@@ -220,7 +220,7 @@ pub fn overlaps_solid(world: &mut VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
     false
 }
 
-pub fn is_on_ground(world: &mut VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
+pub fn is_on_ground(world: &VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
     let probe = pos.y - 0.08;
     let samples = [
         (0.0, 0.0),
@@ -233,7 +233,7 @@ pub fn is_on_ground(world: &mut VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
         let bx = (pos.x + dx).floor() as i32;
         let by = probe.floor() as i32;
         let bz = (pos.z + dz).floor() as i32;
-        if world.get_block(bx, by, bz).solid() {
+        if world.peek_block(bx, by, bz).solid() {
             return true;
         }
     }
@@ -241,7 +241,7 @@ pub fn is_on_ground(world: &mut VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
 }
 
 fn try_step_up(
-    world: &mut VoxelWorld,
+    world: &VoxelWorld,
     pos: &mut Vec3,
     aabb: Aabb,
     velocity: &Vec3,
@@ -283,7 +283,7 @@ fn try_step_up(
 }
 
 fn resolve_axis(
-    world: &mut VoxelWorld,
+    world: &VoxelWorld,
     pos: &mut Vec3,
     aabb: Aabb,
     axis: usize,
@@ -302,7 +302,7 @@ fn resolve_axis(
             for bx in min_b[0]..=max_b[0] {
                 for by in min_b[1]..=max_b[1] {
                     for bz in min_b[2]..=max_b[2] {
-                        if !world.get_block(bx, by, bz).solid() {
+                        if !world.peek_block(bx, by, bz).solid() {
                             continue;
                         }
                         let block_min_x = bx as f32;
@@ -341,7 +341,7 @@ fn resolve_axis(
             for bx in min_b[0]..=max_b[0] {
                 for by in min_b[1]..=max_b[1] {
                     for bz in min_b[2]..=max_b[2] {
-                        if !world.get_block(bx, by, bz).solid() {
+                        if !world.peek_block(bx, by, bz).solid() {
                             continue;
                         }
                         let block_min_y = by as f32;
@@ -380,7 +380,7 @@ fn resolve_axis(
             for bx in min_b[0]..=max_b[0] {
                 for by in min_b[1]..=max_b[1] {
                     for bz in min_b[2]..=max_b[2] {
-                        if !world.get_block(bx, by, bz).solid() {
+                        if !world.peek_block(bx, by, bz).solid() {
                             continue;
                         }
                         let block_min_z = bz as f32;
@@ -416,7 +416,7 @@ fn resolve_axis(
     hit
 }
 
-pub fn snap_feet_to_floor(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
+pub fn snap_feet_to_floor(world: &VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
     let Some(floor) = floor_height(world, pos.x, pos.z, aabb) else {
         return;
     };
@@ -426,7 +426,7 @@ pub fn snap_feet_to_floor(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
     }
 }
 
-fn floor_height(world: &mut VoxelWorld, x: f32, z: f32, aabb: Aabb) -> Option<f32> {
+fn floor_height(world: &VoxelWorld, x: f32, z: f32, aabb: Aabb) -> Option<f32> {
     let samples = [
         (0.0, 0.0),
         (aabb.half_x * 0.7, 0.0),
@@ -439,7 +439,7 @@ fn floor_height(world: &mut VoxelWorld, x: f32, z: f32, aabb: Aabb) -> Option<f3
         let bx = (x + dx).floor() as i32;
         let bz = (z + dz).floor() as i32;
         for y in (0..WORLD_HEIGHT).rev() {
-            if world.get_block(bx, y, bz).solid() {
+            if world.peek_block(bx, y, bz).solid() {
                 let top = y as f32 + 1.0;
                 best = Some(best.map_or(top, |v: f32| v.max(top)));
                 break;

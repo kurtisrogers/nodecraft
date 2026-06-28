@@ -239,7 +239,7 @@ pub fn mob_ai(
 
         let mut feet = transform.translation - Vec3::Y * aabb.height * 0.5;
         let result = collision::move_aabb(
-            &mut world.inner,
+            &world.inner,
             &mut feet,
             &mut mob.velocity,
             aabb,

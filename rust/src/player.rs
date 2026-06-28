@@ -1,8 +1,8 @@
 use crate::blocks::{block_drop, BlockId};
 use crate::collision::{self, Aabb};
 use crate::config::{
-    EYE_HEIGHT, GRAVITY, JUMP_VELOCITY, MOUSE_SENSITIVITY, PLAYER_HEIGHT, PLAYER_WIDTH, SPRINT_SPEED,
-    WALK_SPEED, WORLD_HEIGHT,
+    EYE_HEIGHT, FOG_END, FOG_START, GRAVITY, JUMP_VELOCITY, MOUSE_SENSITIVITY, PLAYER_HEIGHT,
+    PLAYER_WIDTH, SPRINT_SPEED, WASM_FOG_END, WASM_FOG_START, WALK_SPEED, WORLD_HEIGHT,
 };
 use crate::inventory::GameInventory;
 use crate::meshing::{ChunkMesh, RemeshQueue, VoxelWorldResource};
@@ -31,6 +31,7 @@ pub struct PlayerState {
     pub cursor_locked: bool,
     pub inventory_open: bool,
     pub terrain_ready: bool,
+    pub walk_bob_phase: f32,
 }
 
 impl Default for PlayerState {
@@ -47,6 +48,7 @@ impl Default for PlayerState {
             cursor_locked: false,
             inventory_open: false,
             terrain_ready: false,
+            walk_bob_phase: 0.0,
         }
     }
 }
@@ -62,7 +64,7 @@ pub fn spawn_player(
     let spawn = world.inner.find_safe_spawn(0, 0);
     player.position = Vec3::new(spawn.0, spawn.1, spawn.2);
     player.velocity = Vec3::ZERO;
-    collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+    collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
 
     commands.spawn((
         Camera3d::default(),
@@ -72,14 +74,14 @@ pub fn spawn_player(
             color: Color::srgb(0.53, 0.81, 0.92),
             falloff: FogFalloff::Linear {
                 start: if cfg!(target_arch = "wasm32") {
-                    48.0
+                    WASM_FOG_START
                 } else {
-                    crate::config::FOG_START
+                    FOG_START
                 },
                 end: if cfg!(target_arch = "wasm32") {
-                    128.0
+                    WASM_FOG_END
                 } else {
-                    crate::config::FOG_END
+                    FOG_END
                 },
             },
             ..default()
@@ -197,7 +199,7 @@ pub fn player_movement(
     let mut position = player.position;
     let mut velocity = player.velocity;
     let result = collision::move_aabb(
-        &mut world.inner,
+        &world.inner,
         &mut position,
         &mut velocity,
         PLAYER_AABB,
@@ -207,10 +209,17 @@ pub fn player_movement(
     player.position = position;
     player.velocity = velocity;
     player.on_ground = result.on_ground;
-    if collision::overlaps_solid(&mut world.inner, player.position, PLAYER_AABB) {
-        collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+    if collision::overlaps_solid(&world.inner, player.position, PLAYER_AABB) {
+        collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
     }
-    nudge_eye_clear(&mut world.inner, &mut player.position);
+    nudge_eye_clear(&world.inner, &mut player.position);
+
+    let horizontal_speed = Vec2::new(player.velocity.x, player.velocity.z).length();
+    if player.on_ground && horizontal_speed > 0.5 {
+        player.walk_bob_phase += dt * horizontal_speed * 1.15;
+    } else {
+        player.walk_bob_phase *= 0.85;
+    }
 
     if player.position.y < -10.0 {
         let px = player.position.x.floor() as i32;
@@ -219,7 +228,7 @@ pub fn player_movement(
         player.position = Vec3::new(spawn.0, spawn.1, spawn.2);
         player.velocity = Vec3::ZERO;
         player.health = 20;
-        collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+        collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
     }
 
     player.attack_cooldown = (player.attack_cooldown - dt).max(0.0);
@@ -239,13 +248,13 @@ fn feet_in_lava(world: &mut crate::world::VoxelWorld, player: &PlayerState) -> b
         || world.get_block(bx, by - 1, bz) == BlockId::Lava
 }
 
-fn nudge_eye_clear(world: &mut crate::world::VoxelWorld, pos: &mut Vec3) {
+fn nudge_eye_clear(world: &crate::world::VoxelWorld, pos: &mut Vec3) {
     let eye_y = pos.y + EYE_HEIGHT;
     for _ in 0..6 {
         let bx = pos.x.floor() as i32;
         let by = eye_y.floor() as i32;
         let bz = pos.z.floor() as i32;
-        if !world.get_block(bx, by, bz).solid() {
+        if !world.peek_block(bx, by, bz).solid() {
             break;
         }
         pos.y += 0.25;
@@ -484,7 +493,7 @@ pub fn update_terrain_ready(
     }
     player.terrain_ready = true;
     player.pitch = 0.0;
-    collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+    collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
 }
 
 pub fn mobile_session_start(
@@ -499,7 +508,7 @@ pub fn mobile_session_start(
     if mobile.active && !*was_active {
         player.pitch = 0.0;
         player.yaw = 0.0;
-        collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+        collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
     }
     *was_active = mobile.active;
 }
@@ -509,7 +518,13 @@ pub fn sync_camera(
     mut camera: Query<&mut Transform, With<PlayerCamera>>,
 ) {
     if let Ok(mut transform) = camera.get_single_mut() {
-        transform.translation = player.position + Vec3::Y * EYE_HEIGHT;
+        let horizontal_speed = Vec2::new(player.velocity.x, player.velocity.z).length();
+        let bob = if player.on_ground && horizontal_speed > 0.5 {
+            player.walk_bob_phase.sin() * 0.035
+        } else {
+            0.0
+        };
+        transform.translation = player.position + Vec3::new(0.0, EYE_HEIGHT + bob, 0.0);
         transform.rotation = Quat::from_euler(EulerRot::YXZ, player.yaw, player.pitch, 0.0);
     }
 }
