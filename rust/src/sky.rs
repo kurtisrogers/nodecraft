@@ -1,6 +1,5 @@
-use crate::config::DAY_LENGTH_SECS;
 use crate::player::PlayerState;
-use crate::weather::DayNight;
+use crate::weather::{celestial_state, DayNight, MoonLight, SunLight};
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
@@ -9,10 +8,14 @@ use rand::{Rng, SeedableRng};
 
 const SKY_DISTANCE: f32 = 280.0;
 const SUN_RADIUS: f32 = 10.0;
+const MOON_RADIUS: f32 = 8.0;
 const STAR_COUNT: usize = 120;
 
 #[derive(Component)]
 pub struct SunDisc;
+
+#[derive(Component)]
+pub struct MoonDisc;
 
 #[derive(Component)]
 pub struct StarField;
@@ -32,6 +35,19 @@ pub fn setup_sky(
         Mesh3d(meshes.add(Sphere::new(SUN_RADIUS))),
         MeshMaterial3d(sun_material),
         SunDisc,
+        Visibility::Hidden,
+    ));
+
+    let moon_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.88, 0.9, 0.96),
+        emissive: LinearRgba::new(0.9, 0.95, 1.1, 1.0),
+        unlit: true,
+        ..default()
+    });
+    commands.spawn((
+        Mesh3d(meshes.add(Sphere::new(MOON_RADIUS))),
+        MeshMaterial3d(moon_material),
+        MoonDisc,
         Visibility::Hidden,
     ));
 
@@ -89,23 +105,47 @@ fn build_star_mesh() -> Mesh {
 pub fn update_sky(
     day: Res<DayNight>,
     player: Res<PlayerState>,
-    light: Query<&Transform, With<DirectionalLight>>,
-    mut sun: Query<(&mut Transform, &mut Visibility), (With<SunDisc>, Without<StarField>)>,
-    mut stars: Query<(&mut Transform, &mut Visibility), (With<StarField>, Without<SunDisc>)>,
+    sun_light: Query<&Transform, (With<SunLight>, Without<MoonLight>)>,
+    moon_light: Query<&Transform, (With<MoonLight>, Without<SunLight>)>,
+    mut sun: Query<
+        (&mut Transform, &mut Visibility),
+        (With<SunDisc>, Without<MoonDisc>, Without<StarField>),
+    >,
+    mut moon: Query<
+        (&mut Transform, &mut Visibility),
+        (With<MoonDisc>, Without<SunDisc>, Without<StarField>),
+    >,
+    mut stars: Query<
+        (&mut Transform, &mut Visibility),
+        (With<StarField>, Without<SunDisc>, Without<MoonDisc>),
+    >,
 ) {
-    let cycle = (day.time % DAY_LENGTH_SECS) / DAY_LENGTH_SECS;
-    let sun_height = (cycle * std::f32::consts::TAU).sin();
+    let state = celestial_state(&day);
     let anchor = player.position;
 
-    let light_forward = light
+    let sun_forward = sun_light
         .get_single()
         .map(|t| t.forward().as_vec3())
         .unwrap_or(Vec3::NEG_Y);
+    let moon_forward = moon_light
+        .get_single()
+        .map(|t| t.forward().as_vec3())
+        .unwrap_or(Vec3::Y);
 
     if let Ok((mut transform, mut visibility)) = sun.get_single_mut() {
-        transform.translation = anchor - light_forward * SKY_DISTANCE;
+        transform.translation = anchor - sun_forward * SKY_DISTANCE;
         transform.rotation = Quat::IDENTITY;
-        *visibility = if sun_height > 0.08 {
+        *visibility = if state.sun > 0.08 {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+
+    if let Ok((mut transform, mut visibility)) = moon.get_single_mut() {
+        transform.translation = anchor - moon_forward * SKY_DISTANCE;
+        transform.rotation = Quat::IDENTITY;
+        *visibility = if state.sun < -0.08 {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -114,7 +154,7 @@ pub fn update_sky(
 
     if let Ok((mut transform, mut visibility)) = stars.get_single_mut() {
         transform.translation = anchor;
-        *visibility = if sun_height < -0.08 {
+        *visibility = if state.sun < -0.08 {
             Visibility::Visible
         } else {
             Visibility::Hidden
