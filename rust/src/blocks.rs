@@ -50,6 +50,10 @@ impl BlockId {
         }
     }
 
+    pub fn is_cross_decoration(self) -> bool {
+        matches!(self, Self::TallGrass | Self::Flower | Self::Wheat)
+    }
+
     pub fn solid(self) -> bool {
         matches!(
             self,

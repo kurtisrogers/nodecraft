@@ -102,6 +102,19 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_x: i32, chunk_z: i32) -> Optio
         for y in min_y..=max_y {
             for z in 0..CHUNK_SIZE {
                 let block = get_block_local(&chunk.blocks, x, y, z);
+                if block.is_cross_decoration() {
+                    push_cross_decoration(
+                        &mut positions,
+                        &mut normals,
+                        &mut colors,
+                        &mut indices,
+                        x,
+                        y,
+                        z,
+                        block,
+                    );
+                    continue;
+                }
                 if !block.solid() {
                     continue;
                 }
@@ -236,6 +249,55 @@ fn push_face(
         colors.push(rgba);
     }
     indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+}
+
+fn push_cross_decoration(
+    positions: &mut Vec<[f32; 3]>,
+    normals: &mut Vec<[f32; 3]>,
+    colors: &mut Vec<[f32; 4]>,
+    indices: &mut Vec<u32>,
+    x: i32,
+    y: i32,
+    z: i32,
+    block: BlockId,
+) {
+    let fx = x as f32;
+    let fy = y as f32;
+    let fz = z as f32;
+    let color = block.color(Face::Side);
+    let rgba = color.to_srgba();
+    let rgba = [rgba.red, rgba.green, rgba.blue, rgba.alpha];
+
+    let quads: [([[f32; 3]; 4], [f32; 3]); 2] = [
+        (
+            [
+                [fx, fy, fz + 0.5],
+                [fx + 1.0, fy, fz + 0.5],
+                [fx + 1.0, fy + 1.0, fz + 0.5],
+                [fx, fy + 1.0, fz + 0.5],
+            ],
+            [0.0, 0.0, 1.0],
+        ),
+        (
+            [
+                [fx + 0.5, fy, fz],
+                [fx + 0.5, fy, fz + 1.0],
+                [fx + 0.5, fy + 1.0, fz + 1.0],
+                [fx + 0.5, fy + 1.0, fz],
+            ],
+            [1.0, 0.0, 0.0],
+        ),
+    ];
+
+    for (verts, normal) in quads {
+        let base = positions.len() as u32;
+        for v in verts {
+            positions.push(v);
+            normals.push(normal);
+            colors.push(rgba);
+        }
+        indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
 }
 
 pub fn sync_chunk_meshes(

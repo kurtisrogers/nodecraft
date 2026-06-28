@@ -31,6 +31,7 @@ impl VoxelWorld {
             let chunk = generate_chunk(chunk_x, chunk_z, &self.noise);
             self.chunks.insert(key, chunk);
             self.mark_neighbors_dirty(chunk_x, chunk_z);
+            crate::world_gen::decorate_chunk_vegetation(self, chunk_x, chunk_z);
         }
         self.chunks.get_mut(&key).unwrap()
     }

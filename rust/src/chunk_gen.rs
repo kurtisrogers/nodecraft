@@ -194,11 +194,7 @@ fn place_surface_decorations(
     let is_snow = biome.temperature < -0.3;
 
     if !is_desert && !is_snow && !noise.is_in_settlement(world_x, world_z) {
-        if noise.should_place_tree(world_x, world_z) && count_tree_clearance(blocks, x, z, surface_y) >= 20 {
-            generate_tree(blocks, x, surface_y, z, world_x, world_z, noise);
-        } else if noise.should_place_bush(world_x, world_z) {
-            generate_bush(blocks, x, surface_y, z);
-        }
+        // Trees and bushes are placed in world_gen::decorate_chunk_vegetation.
     }
 
     let above = surface_y + 1;
@@ -264,69 +260,6 @@ pub fn set_block_local(blocks: &mut [BlockId], x: i32, y: i32, z: i32, block: Bl
         return;
     }
     blocks[chunk_index(x, y, z)] = block;
-}
-
-fn count_tree_clearance(blocks: &[BlockId], x: i32, z: i32, surface_y: i32) -> i32 {
-    let mut score = 0;
-    for dx in -2i32..=2 {
-        for dz in -2i32..=2 {
-            let foot = get_block_local(blocks, x + dx, surface_y + 1, z + dz);
-            let head = get_block_local(blocks, x + dx, surface_y + 2, z + dz);
-            if matches!(foot, BlockId::Air | BlockId::TallGrass | BlockId::Flower) {
-                score += 1;
-            }
-            if head == BlockId::Air {
-                score += 1;
-            }
-        }
-    }
-    score
-}
-
-fn generate_tree(
-    blocks: &mut [BlockId],
-    x: i32,
-    surface_y: i32,
-    z: i32,
-    world_x: i32,
-    world_z: i32,
-    noise: &NoiseGenerator,
-) {
-    let variant = noise.roll(world_x, world_z, 11);
-    let trunk_height = if variant > 0.7 { 5 } else if variant > 0.35 { 4 } else { 3 };
-    for dy in 0..trunk_height {
-        if surface_y + dy < WORLD_HEIGHT {
-            set_block_local(blocks, x, surface_y + dy, z, BlockId::Wood);
-        }
-    }
-    let leaf_start = surface_y + trunk_height - 2;
-    for dy in 0..3 {
-        for dx in -2i32..=2 {
-            for dz in -2i32..=2 {
-                if dx.abs() == 2 && dz.abs() == 2 {
-                    continue;
-                }
-                if dy == 2 && (dx.abs() > 1 || dz.abs() > 1) {
-                    continue;
-                }
-                let existing = get_block_local(blocks, x + dx, leaf_start + dy, z + dz);
-                if matches!(existing, BlockId::Air | BlockId::TallGrass | BlockId::Flower) {
-                    set_block_local(blocks, x + dx, leaf_start + dy, z + dz, BlockId::Leaves);
-                }
-            }
-        }
-    }
-}
-
-fn generate_bush(blocks: &mut [BlockId], x: i32, surface_y: i32, z: i32) {
-    for dx in -1i32..=1 {
-        for dz in -1i32..=1 {
-            let ly = surface_y + 1;
-            if ly < WORLD_HEIGHT && get_block_local(blocks, x + dx, ly, z + dz) == BlockId::Air {
-                set_block_local(blocks, x + dx, ly, z + dz, BlockId::Leaves);
-            }
-        }
-    }
 }
 
 fn carve_underground(

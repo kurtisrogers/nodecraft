@@ -7,9 +7,9 @@ use bevy::render::render_asset::RenderAssetUsages;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
-const SKY_DISTANCE: f32 = 320.0;
-const SUN_RADIUS: f32 = 14.0;
-const STAR_COUNT: usize = 140;
+const SKY_DISTANCE: f32 = 280.0;
+const SUN_RADIUS: f32 = 10.0;
+const STAR_COUNT: usize = 120;
 
 #[derive(Component)]
 pub struct SunDisc;
@@ -24,7 +24,7 @@ pub fn setup_sky(
 ) {
     let sun_material = materials.add(StandardMaterial {
         base_color: Color::srgb(1.0, 0.92, 0.45),
-        emissive: LinearRgba::new(2.5, 2.0, 0.6, 1.0),
+        emissive: LinearRgba::new(2.0, 1.6, 0.4, 1.0),
         unlit: true,
         ..default()
     });
@@ -36,10 +36,10 @@ pub fn setup_sky(
     ));
 
     let star_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 1.0, 0.95),
-        emissive: LinearRgba::new(1.2, 1.2, 1.3, 1.0),
+        base_color: Color::srgba(1.0, 1.0, 1.0, 0.9),
+        emissive: LinearRgba::new(0.9, 0.9, 1.0, 1.0),
         unlit: true,
-        alpha_mode: AlphaMode::Blend,
+        alpha_mode: AlphaMode::Add,
         ..default()
     });
     commands.spawn((
@@ -68,9 +68,9 @@ fn build_star_mesh() -> Mesh {
             Vec3::Y.cross(dir).normalize()
         };
         let bitangent = dir.cross(tangent).normalize();
-        let size = rng.gen_range(0.35..0.9);
+        let size = rng.gen_range(0.12..0.28);
         let base = positions.len() as u32;
-        let normal = [dir.x, dir.y, dir.z];
+        let normal = [-dir.x, -dir.y, -dir.z];
         for (sx, sy) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
             let offset = tangent * sx * size + bitangent * sy * size;
             let p = center + offset;
@@ -105,9 +105,8 @@ pub fn update_sky(
 
     if let Ok((mut transform, mut visibility)) = sun.get_single_mut() {
         transform.translation = anchor - light_forward * SKY_DISTANCE;
-        transform.look_at(anchor, Vec3::Y);
-        let alpha = ((sun_height - 0.05) / 0.25).clamp(0.0, 1.0);
-        *visibility = if alpha > 0.02 {
+        transform.rotation = Quat::IDENTITY;
+        *visibility = if sun_height > 0.08 {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -116,8 +115,7 @@ pub fn update_sky(
 
     if let Ok((mut transform, mut visibility)) = stars.get_single_mut() {
         transform.translation = anchor;
-        let night = ((-sun_height - 0.05) / 0.25).clamp(0.0, 1.0);
-        *visibility = if night > 0.02 {
+        *visibility = if sun_height < -0.08 {
             Visibility::Visible
         } else {
             Visibility::Hidden
