@@ -1,5 +1,6 @@
 mod blocks;
 mod chunk_gen;
+mod collision;
 mod config;
 mod inventory;
 mod meshing;
@@ -16,12 +17,12 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
 use config::DEFAULT_SEED;
-use meshing::{sync_chunk_meshes, update_world_chunks, ChunkMaterial, RemeshQueue, VoxelWorldResource};
+use meshing::{sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial, RemeshQueue, VoxelWorldResource};
 use mobile::{clear_mobile_frame, init_mobile, notify_mobile_ui_ready, sync_mobile_input, sync_mobile_menu_class, MobileInput};
-use mobs::{mob_attack_interaction, mob_ai, mob_spawner, MobManager};
+use mobs::{mob_attack_interaction, mob_ai, mob_spawner};
 use player::{
     block_interaction, hotbar_keys, lock_cursor, mouse_look, player_movement, spawn_player,
-    sync_camera, toggle_inventory, update_terrain_ready, PlayerCamera, PlayerState,
+    sync_camera, toggle_inventory, update_terrain_ready, PlayerState,
 };
 use ui::{draw_hud, setup_fog, update_fps, HudState};
 use weather::{update_day_night, update_lights};
@@ -68,6 +69,7 @@ pub fn run() {
     .insert_resource(PlayerState::default())
     .insert_resource(GameInventory::with_starter_items())
     .insert_resource(RemeshQueue::default())
+    .insert_resource(ChunkEntityMap::default())
     .insert_resource(HudState::default())
     .insert_resource(MobileInput::default())
     .insert_resource(weather::DayNight::default())
@@ -130,6 +132,7 @@ fn setup_scene(
         base_color: Color::WHITE,
         perceptual_roughness: 1.0,
         metallic: 0.0,
+        unlit: true,
         ..default()
     });
     commands.insert_resource(ChunkMaterial(mat));
@@ -152,7 +155,7 @@ fn init_world(
     world.loaded_chunks = world.inner.load_chunks_around(px, pz);
     crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
     for &(cx, cz) in &world.loaded_chunks.clone() {
-        queue.keys.push((cx, cz));
+        queue.push((cx, cz));
     }
 }
 

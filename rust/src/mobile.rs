@@ -200,6 +200,9 @@ pub fn notify_mobile_ui_ready(
     _wait_frames: Local<u32>,
 ) {}
 
+#[cfg(not(target_arch = "wasm32"))]
+pub fn sync_mobile_menu_class(_player: Res<PlayerState>, _mobile: Res<MobileInput>) {}
+
 #[cfg(target_arch = "wasm32")]
 pub fn sync_mobile_menu_class(player: Res<PlayerState>, mobile: Res<MobileInput>) {
     if !mobile.is_mobile {
