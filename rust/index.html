@@ -54,6 +54,17 @@
     body.debug #debug-status { display: block; }
     #loading h1 { margin: 0 0 0.5rem; font-size: 2rem; }
     #loading p { margin: 0.25rem; opacity: 0.85; }
+    #loading .loading-detail { font-size: 0.9rem; max-width: 18rem; text-align: center; }
+    #loading-dismiss {
+      margin-top: 1rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.12);
+      color: #e8f5e9;
+      font-size: 1rem;
+      cursor: pointer;
+    }
 
     #mobile-controls {
       position: fixed;
@@ -234,6 +245,8 @@
     <h1>Nodecraft</h1>
     <p>Rust + Bevy</p>
     <p>Loading WASM…</p>
+    <p id="loading-status" class="loading-detail">First visit downloads ~18MB</p>
+    <button id="loading-dismiss" type="button" hidden>Tap to continue</button>
   </div>
   <canvas id="canvas"></canvas>
 
@@ -266,20 +279,59 @@
   <script>
       (function () {
       const TOUCH_LOOK_SENSITIVITY = 0.004;
+      const loadStarted = Date.now();
 
       function hideLoadingOverlay() {
         const el = document.getElementById('loading');
         if (el) el.classList.add('hidden');
       }
 
+      function setLoadingStatus(text) {
+        const el = document.getElementById('loading-status');
+        if (el) el.textContent = text;
+      }
+
+      function showDismissButton() {
+        const btn = document.getElementById('loading-dismiss');
+        if (!btn || !btn.hidden) return;
+        btn.hidden = false;
+        btn.addEventListener('click', () => {
+          hideLoadingOverlay();
+        });
+      }
+
       window.addEventListener('TrunkApplicationStarted', hideLoadingOverlay);
-      setTimeout(() => {
-        const el = document.getElementById('loading');
-        if (el && !el.classList.contains('hidden')) {
-          const status = el.querySelector('p:last-child');
-          if (status) status.textContent = 'Still loading… first visit downloads ~20MB';
+      window.addEventListener('unhandledrejection', (event) => {
+        console.error('WASM load error', event.reason);
+        setLoadingStatus('Load failed — tap below to retry');
+        showDismissButton();
+        const btn = document.getElementById('loading-dismiss');
+        if (btn) {
+          btn.textContent = 'Tap to reload';
+          btn.onclick = () => location.reload();
         }
-      }, 20000);
+      });
+
+      // Dismiss as soon as wasm-bindgen exports are available.
+      const wasmReadyPoll = setInterval(() => {
+        if (window.wasmBindings) {
+          hideLoadingOverlay();
+          clearInterval(wasmReadyPoll);
+        }
+      }, 200);
+
+      // Progressive status while the ~18MB binary downloads/compiles on mobile.
+      setTimeout(() => setLoadingStatus('Downloading game data (~18MB)…'), 3000);
+      setTimeout(() => setLoadingStatus('Compiling on your device… this can take a minute'), 15000);
+      setTimeout(() => {
+        setLoadingStatus('Still working… you can tap below to check if the game loaded');
+        showDismissButton();
+      }, 35000);
+      setTimeout(() => {
+        if (!document.getElementById('loading')?.classList.contains('hidden')) {
+          setLoadingStatus(`Still loading after ${Math.round((Date.now() - loadStarted) / 1000)}s — try Wi‑Fi or tap below`);
+        }
+      }, 60000);
 
       if (new URLSearchParams(location.search).has('debug')) {
         document.body.classList.add('debug');

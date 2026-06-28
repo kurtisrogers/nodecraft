@@ -17,11 +17,10 @@ mod weather;
 mod world;
 mod world_gen;
 
-use bevy::pbr::MaterialPlugin;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
-use chunk_material::{load_voxel_chunk_shader, VoxelChunkMaterial};
+use chunk_material::{VoxelChunkMaterial, VoxelChunkMaterialPlugin};
 use config::{DEFAULT_SEED, WASM_BOOT_CHUNK_RADIUS, WASM_RENDER_DISTANCE};
 use meshing::{
     bootstrap_player_meshes, sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial,
@@ -52,7 +51,6 @@ pub fn run() {
     };
 
     let mut app = App::new();
-    load_voxel_chunk_shader(&mut app);
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -79,7 +77,7 @@ pub fn run() {
                 ..default()
             }),
     )
-    .add_plugins(MaterialPlugin::<VoxelChunkMaterial>::default())
+    .add_plugins(VoxelChunkMaterialPlugin)
     .insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)));
     if !wasm {
         app.add_plugins(EguiPlugin);
