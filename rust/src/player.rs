@@ -2,15 +2,14 @@ use crate::blocks::{block_drop, BlockId};
 use crate::collision::{self, Aabb};
 use crate::config::{
     EYE_HEIGHT, FOG_END, FOG_START, GRAVITY, JUMP_VELOCITY, MOUSE_SENSITIVITY, PLAYER_HEIGHT,
-    PLAYER_WIDTH, SPRINT_SPEED, WASM_FOG_END, WASM_FOG_START, WALK_SPEED, WORLD_HEIGHT,
+    PLAYER_WIDTH, SPRINT_SPEED, WALK_SPEED, WORLD_HEIGHT,
 };
 use crate::inventory::GameInventory;
 use crate::meshing::{ChunkMesh, RemeshQueue, VoxelWorldResource};
 use crate::mobile::{is_controlling, MobileInput};
-use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
-use bevy::render::camera::Exposure;
+use bevy::render::view::Msaa;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_pbr::{DistanceFog, FogFalloff};
 
@@ -66,38 +65,40 @@ pub fn spawn_player(
     let spawn = world.inner.find_safe_spawn(0, 0);
     player.position = Vec3::new(spawn.0, spawn.1, spawn.2);
     player.velocity = Vec3::ZERO;
+    player.pitch = if cfg!(target_arch = "wasm32") {
+        // Mobile browsers start with the camera level; nudge down so ground is in view.
+        -0.35
+    } else {
+        0.0
+    };
     collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
 
-    commands.spawn((
+    let mut camera = commands.spawn((
         Camera3d::default(),
-        Tonemapping::None,
-        Exposure {
-            ev100: Exposure::EV100_INDOOR,
-        },
         Projection::Perspective(PerspectiveProjection {
             far: 512.0,
             near: 0.05,
             ..default()
         }),
-        Transform::from_translation(player.position + Vec3::Y * EYE_HEIGHT),
+        Transform::from_translation(player.position + Vec3::Y * EYE_HEIGHT)
+            .with_rotation(Quat::from_euler(EulerRot::YXZ, player.yaw, player.pitch, 0.0)),
         PlayerCamera,
-        DistanceFog {
-            color: Color::srgb(0.53, 0.81, 0.92),
-            falloff: FogFalloff::Linear {
-                start: if cfg!(target_arch = "wasm32") {
-                    WASM_FOG_START
-                } else {
-                    FOG_START
-                },
-                end: if cfg!(target_arch = "wasm32") {
-                    WASM_FOG_END
-                } else {
-                    FOG_END
-                },
-            },
-            ..default()
-        },
     ));
+    if cfg!(target_arch = "wasm32") {
+        // MSAA and distance fog are unreliable on mobile WebGL2; keep the path simple.
+        camera.insert(Msaa::Off);
+    } else {
+        camera.insert((
+            DistanceFog {
+                color: Color::srgb(0.53, 0.81, 0.92),
+                falloff: FogFalloff::Linear {
+                    start: FOG_START,
+                    end: FOG_END,
+                },
+                ..default()
+            },
+        ));
+    }
 }
 
 pub fn lock_cursor(
@@ -503,7 +504,7 @@ pub fn update_terrain_ready(
         return;
     }
     player.terrain_ready = true;
-    player.pitch = 0.0;
+    player.pitch = if cfg!(target_arch = "wasm32") { -0.35 } else { 0.0 };
     collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
 }
 
@@ -517,7 +518,7 @@ pub fn mobile_session_start(
         player.inventory_open = false;
     }
     if mobile.active && !*was_active {
-        player.pitch = 0.0;
+        player.pitch = if cfg!(target_arch = "wasm32") { -0.35 } else { 0.0 };
         player.yaw = 0.0;
         collision::ensure_clear(&world.inner, &mut player.position, PLAYER_AABB);
     }

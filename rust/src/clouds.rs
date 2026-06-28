@@ -21,6 +21,9 @@ pub fn setup_clouds(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    if cfg!(target_arch = "wasm32") {
+        return;
+    }
     let cloud_material = materials.add(StandardMaterial {
         base_color: Color::srgba(0.97, 0.98, 1.0, 0.92),
         emissive: LinearRgba::new(0.15, 0.16, 0.2, 1.0),
@@ -188,6 +191,9 @@ pub fn update_clouds(
     player: Res<PlayerState>,
     mut clouds: Query<(&mut VoxelCloud, &mut Transform)>,
 ) {
+    if cfg!(target_arch = "wasm32") {
+        return;
+    }
     let dt = time.delta_secs();
     let anchor = player.position;
 

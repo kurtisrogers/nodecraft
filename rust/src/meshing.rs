@@ -308,7 +308,7 @@ pub fn sync_chunk_meshes(
     mut queue: ResMut<RemeshQueue>,
     mut entity_map: ResMut<ChunkEntityMap>,
 ) {
-    let mut budget = if cfg!(target_arch = "wasm32") { 8 } else { 6 };
+    let mut budget = if cfg!(target_arch = "wasm32") { 12 } else { 6 };
     let player_chunk = world.player_chunk;
     let loaded: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
 
@@ -418,7 +418,7 @@ pub fn update_world_chunks(
     }
 }
 
-/// Immediately mesh the 3×3 chunks around the player so the world is visible on frame 1.
+/// Immediately mesh chunks around the player so the world is visible on frame 1.
 pub fn bootstrap_player_meshes(
     mut commands: Commands,
     mut world: ResMut<VoxelWorldResource>,
@@ -428,40 +428,57 @@ pub fn bootstrap_player_meshes(
     mut queue: ResMut<RemeshQueue>,
 ) {
     let (pcx, pcz) = world.player_chunk;
-    for dx in -1i32..=1 {
-        for dz in -1i32..=1 {
-            let cx = pcx + dx;
-            let cz = pcz + dz;
-            if !world.loaded_chunks.contains(&(cx, cz)) {
-                continue;
-            }
-            let Some(mesh) = build_chunk_mesh(&world.inner, cx, cz) else {
-                continue;
-            };
-            if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
-                chunk.dirty = false;
-            }
-            let handle = meshes.add(mesh);
-            if let Some(&entity) = entity_map.entities.get(&(cx, cz)) {
-                commands.entity(entity).insert(Mesh3d(handle));
-            } else {
-                let entity = commands
-                    .spawn((
-                        Mesh3d(handle),
-                        MeshMaterial3d(chunk_mat.0.clone()),
-                        Transform::from_xyz(
-                            (cx * CHUNK_SIZE) as f32,
-                            0.0,
-                            (cz * CHUNK_SIZE) as f32,
-                        ),
-                        ChunkMesh { chunk_x: cx, chunk_z: cz },
-                    ))
-                    .id();
-                entity_map.entities.insert((cx, cz), entity);
-            }
-            queue.push((cx, cz));
+    let radius = if cfg!(target_arch = "wasm32") { 2 } else { 1 };
+    for dx in -radius..=radius {
+        for dz in -radius..=radius {
+            mesh_chunk_entity(
+                &mut commands,
+                &mut world,
+                &mut meshes,
+                &chunk_mat,
+                &mut entity_map,
+                &mut queue,
+                pcx + dx,
+                pcz + dz,
+            );
         }
     }
+}
+
+fn mesh_chunk_entity(
+    commands: &mut Commands,
+    world: &mut VoxelWorldResource,
+    meshes: &mut Assets<Mesh>,
+    chunk_mat: &ChunkMaterial,
+    entity_map: &mut ChunkEntityMap,
+    queue: &mut RemeshQueue,
+    cx: i32,
+    cz: i32,
+) {
+    if !world.loaded_chunks.contains(&(cx, cz)) {
+        return;
+    }
+    let Some(mesh) = build_chunk_mesh(&world.inner, cx, cz) else {
+        return;
+    };
+    if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
+        chunk.dirty = false;
+    }
+    let handle = meshes.add(mesh);
+    if let Some(&entity) = entity_map.entities.get(&(cx, cz)) {
+        commands.entity(entity).insert(Mesh3d(handle));
+    } else {
+        let entity = commands
+            .spawn((
+                Mesh3d(handle),
+                MeshMaterial3d(chunk_mat.0.clone()),
+                Transform::from_xyz((cx * CHUNK_SIZE) as f32, 0.0, (cz * CHUNK_SIZE) as f32),
+                ChunkMesh { chunk_x: cx, chunk_z: cz },
+            ))
+            .id();
+        entity_map.entities.insert((cx, cz), entity);
+    }
+    queue.push((cx, cz));
 }
 
 use crate::player::PlayerState;
