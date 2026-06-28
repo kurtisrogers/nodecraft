@@ -160,6 +160,7 @@ fn setup_scene(
         perceptual_roughness: 1.0,
         metallic: 0.0,
         unlit: true,
+        fog_enabled: false,
         ..default()
     });
     commands.insert_resource(ChunkMaterial(mat));
