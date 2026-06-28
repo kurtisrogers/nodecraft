@@ -16,6 +16,7 @@ mod weather;
 mod world;
 mod world_gen;
 
+use bevy::pbr::{DefaultOpaqueRendererMethod, OpaqueRendererMethod};
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
@@ -49,6 +50,9 @@ pub fn run() {
     };
 
     let mut app = App::new();
+    if wasm {
+        app.insert_resource(DefaultOpaqueRendererMethod::forward());
+    }
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -75,8 +79,11 @@ pub fn run() {
                 ..default()
             }),
     )
-    .add_plugins(EguiPlugin)
-    .insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)))
+    .insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)));
+    if !wasm {
+        app.add_plugins(EguiPlugin);
+    }
+    app
     .insert_resource(VoxelWorldResource::new(DEFAULT_SEED))
     .insert_resource(PlayerState::default())
     .insert_resource(GameInventory::with_starter_items())
@@ -86,7 +93,16 @@ pub fn run() {
     .insert_resource(MobileInput::default())
     .insert_resource(weather::DayNight::default())
     .insert_resource(mobs::MobManager::default())
-    .add_systems(Startup, (setup_scene, setup_sky, setup_clouds, setup_fog, spawn_player, init_world, bootstrap_player_meshes, init_mobile))
+    .add_systems(Startup, (
+        setup_scene,
+        setup_sky,
+        setup_clouds,
+        setup_fog,
+        spawn_player,
+        init_world,
+        bootstrap_player_meshes,
+        init_mobile,
+    ))
     .add_systems(
         Update,
         (
@@ -121,11 +137,54 @@ pub fn run() {
             update_sky,
             update_clouds,
             update_fps,
-            draw_hud,
         ),
     );
+    if !wasm {
+        app.add_systems(Update, draw_hud);
+    }
+
+    if wasm {
+        app.add_systems(Update, resize_wasm_canvas);
+    }
 
     app.run();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn resize_wasm_canvas(mut last_size: Local<Option<(u32, u32)>>) {
+    use wasm_bindgen::JsCast;
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(width) = window.inner_width() else {
+        return;
+    };
+    let Ok(height) = window.inner_height() else {
+        return;
+    };
+    let Some(width) = width.as_f64() else {
+        return;
+    };
+    let Some(height) = height.as_f64() else {
+        return;
+    };
+    let w = width.max(1.0) as u32;
+    let h = height.max(1.0) as u32;
+    if *last_size == Some((w, h)) {
+        return;
+    }
+    *last_size = Some((w, h));
+    let Some(document) = window.document() else {
+        return;
+    };
+    let Some(canvas) = document.get_element_by_id("canvas") else {
+        return;
+    };
+    let Ok(canvas) = canvas.dyn_into::<web_sys::HtmlCanvasElement>() else {
+        return;
+    };
+    canvas.set_width(w);
+    canvas.set_height(h);
 }
 
 fn setup_scene(
@@ -161,6 +220,11 @@ fn setup_scene(
         metallic: 0.0,
         unlit: true,
         fog_enabled: false,
+        opaque_render_method: if cfg!(target_arch = "wasm32") {
+            OpaqueRendererMethod::Forward
+        } else {
+            OpaqueRendererMethod::Auto
+        },
         ..default()
     });
     commands.insert_resource(ChunkMaterial(mat));

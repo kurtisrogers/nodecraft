@@ -32,6 +32,9 @@ pub fn draw_hud(
     day: Res<crate::weather::DayNight>,
     mobile: Res<MobileInput>,
 ) {
+    if mobile.is_mobile {
+        return;
+    }
     let ctx = contexts.ctx_mut();
     let hud_color = egui::Color32::from_rgb(235, 235, 245);
 
