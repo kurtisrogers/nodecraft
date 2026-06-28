@@ -1,4 +1,5 @@
 use crate::blocks::{BlockId, Face};
+use crate::chunk_material::VoxelChunkMaterial;
 use crate::chunk_gen::get_block_local;
 use crate::config::{CHUNK_SIZE, WORLD_HEIGHT};
 use crate::world::VoxelWorld;
@@ -13,7 +14,7 @@ pub struct ChunkMesh {
 }
 
 #[derive(Resource)]
-pub struct ChunkMaterial(pub Handle<StandardMaterial>);
+pub struct ChunkMaterial(pub Handle<VoxelChunkMaterial>);
 
 #[derive(Resource, Default)]
 pub struct RemeshQueue {
@@ -367,6 +368,7 @@ pub fn sync_chunk_meshes(
 
     #[cfg(target_arch = "wasm32")]
     if !entity_map.entities.is_empty() {
+        crate::wasm_entry::set_chunk_mesh_count(entity_map.entities.len());
         crate::wasm_entry::hide_loading_overlay_if_ready(entity_map.entities.len());
     }
 }
@@ -479,6 +481,7 @@ pub fn bootstrap_player_meshes(
         }
     }
     if cfg!(target_arch = "wasm32") && !entity_map.entities.is_empty() {
+        crate::wasm_entry::set_chunk_mesh_count(entity_map.entities.len());
         crate::wasm_entry::hide_loading_overlay_if_ready(entity_map.entities.len());
     }
 }
