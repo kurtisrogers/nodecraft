@@ -203,7 +203,7 @@ pub fn sync_chunk_meshes(
     mut queue: ResMut<RemeshQueue>,
     existing: Query<(Entity, &ChunkMesh)>,
 ) {
-    let mut budget = if cfg!(target_arch = "wasm32") { 3 } else { 4 };
+    let mut budget = if cfg!(target_arch = "wasm32") { 6 } else { 4 };
     let player_chunk = world.player_chunk;
     let loaded: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
 
@@ -271,7 +271,11 @@ impl VoxelWorldResource {
     }
 }
 
-pub fn update_world_chunks(mut world: ResMut<VoxelWorldResource>, player: Res<PlayerState>) {
+pub fn update_world_chunks(
+    mut world: ResMut<VoxelWorldResource>,
+    mut queue: ResMut<RemeshQueue>,
+    player: Res<PlayerState>,
+) {
     let px = player.position.x.floor() as i32;
     let pz = player.position.z.floor() as i32;
     let new_chunk = (px.div_euclid(CHUNK_SIZE), pz.div_euclid(CHUNK_SIZE));
@@ -279,8 +283,14 @@ pub fn update_world_chunks(mut world: ResMut<VoxelWorldResource>, player: Res<Pl
         world.player_chunk = new_chunk;
         let radius = world.inner.render_distance * CHUNK_SIZE + 64;
         crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, radius);
+        let previous: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
         world.loaded_chunks = world.inner.load_chunks_around(px, pz);
         world.inner.unload_distant_chunks(px, pz);
+        for &(cx, cz) in &world.loaded_chunks {
+            if !previous.contains(&(cx, cz)) {
+                queue.keys.push((cx, cz));
+            }
+        }
     }
 }
 

@@ -128,17 +128,28 @@ fn setup_scene(
     let mat = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 1.0,
+        metallic: 0.0,
         ..default()
     });
     commands.insert_resource(ChunkMaterial(mat));
 }
 
-fn init_world(mut world: ResMut<VoxelWorldResource>, mut queue: ResMut<RemeshQueue>) {
+fn init_world(
+    mut world: ResMut<VoxelWorldResource>,
+    mut queue: ResMut<RemeshQueue>,
+    player: Res<PlayerState>,
+) {
     if cfg!(target_arch = "wasm32") {
         world.inner.render_distance = 6;
     }
-    world.loaded_chunks = world.inner.load_chunks_around(0, 0);
-    crate::chunk_gen::ensure_settlements_near(&mut world.inner, 0, 0, 320);
+    let px = player.position.x.floor() as i32;
+    let pz = player.position.z.floor() as i32;
+    world.player_chunk = (
+        px.div_euclid(crate::config::CHUNK_SIZE),
+        pz.div_euclid(crate::config::CHUNK_SIZE),
+    );
+    world.loaded_chunks = world.inner.load_chunks_around(px, pz);
+    crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
     for &(cx, cz) in &world.loaded_chunks.clone() {
         queue.keys.push((cx, cz));
     }

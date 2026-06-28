@@ -357,7 +357,7 @@
             const dx = touch.clientX - lookTouch.x;
             const dy = touch.clientY - lookTouch.y;
             lookTouch = { x: touch.clientX, y: touch.clientY };
-            w.nc_mobile_add_look(-dx * TOUCH_LOOK_SENSITIVITY, dy * TOUCH_LOOK_SENSITIVITY);
+            w.nc_mobile_add_look(dx * TOUCH_LOOK_SENSITIVITY, -dy * TOUCH_LOOK_SENSITIVITY);
           }
         }, { passive: false });
 

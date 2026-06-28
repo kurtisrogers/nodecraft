@@ -1,3 +1,4 @@
+use crate::meshing::{ChunkMesh, VoxelWorldResource};
 use crate::player::PlayerState;
 use bevy::prelude::*;
 use std::sync::Mutex;
@@ -164,8 +165,21 @@ fn set_body_class(class: &str, add: bool) {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn notify_mobile_ui_ready(mut notified: Local<bool>) {
+pub fn notify_mobile_ui_ready(
+    world: Res<VoxelWorldResource>,
+    meshes: Query<&ChunkMesh>,
+    mut notified: Local<bool>,
+    mut wait_frames: Local<u32>,
+) {
     if *notified || !detect_mobile_device() {
+        return;
+    }
+    *wait_frames += 1;
+    let (pcx, pcz) = world.player_chunk;
+    let near_meshed = meshes.iter().any(|mesh| {
+        (mesh.chunk_x - pcx).abs() <= 1 && (mesh.chunk_z - pcz).abs() <= 1
+    });
+    if !near_meshed && *wait_frames < 240 {
         return;
     }
     *notified = true;
@@ -174,7 +188,12 @@ pub fn notify_mobile_ui_ready(mut notified: Local<bool>) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn notify_mobile_ui_ready(_notified: Local<bool>) {}
+pub fn notify_mobile_ui_ready(
+    _world: Res<VoxelWorldResource>,
+    _meshes: Query<&ChunkMesh>,
+    _notified: Local<bool>,
+    _wait_frames: Local<u32>,
+) {}
 
 #[cfg(target_arch = "wasm32")]
 pub fn sync_mobile_menu_class(player: Res<PlayerState>, mobile: Res<MobileInput>) {

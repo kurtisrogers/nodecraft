@@ -36,9 +36,14 @@ impl VoxelWorld {
     }
 
     fn mark_neighbors_dirty(&mut self, chunk_x: i32, chunk_z: i32) {
-        for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
-            if let Some(chunk) = self.chunks.get_mut(&(chunk_x + dx, chunk_z + dz)) {
-                chunk.dirty = true;
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                if dx == 0 && dz == 0 {
+                    continue;
+                }
+                if let Some(chunk) = self.chunks.get_mut(&(chunk_x + dx, chunk_z + dz)) {
+                    chunk.dirty = true;
+                }
             }
         }
     }
@@ -103,6 +108,18 @@ impl VoxelWorld {
         }
         if lz == CHUNK_SIZE - 1 {
             self.mark_chunk_dirty(chunk_x, chunk_z + 1);
+        }
+        if lx == 0 && lz == 0 {
+            self.mark_chunk_dirty(chunk_x - 1, chunk_z - 1);
+        }
+        if lx == 0 && lz == CHUNK_SIZE - 1 {
+            self.mark_chunk_dirty(chunk_x - 1, chunk_z + 1);
+        }
+        if lx == CHUNK_SIZE - 1 && lz == 0 {
+            self.mark_chunk_dirty(chunk_x + 1, chunk_z - 1);
+        }
+        if lx == CHUNK_SIZE - 1 && lz == CHUNK_SIZE - 1 {
+            self.mark_chunk_dirty(chunk_x + 1, chunk_z + 1);
         }
     }
 
