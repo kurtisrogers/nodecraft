@@ -88,7 +88,7 @@ pub fn draw_hud(
             });
     }
 
-    if player.inventory_open {
+    if player.inventory_open && !mobile.is_mobile {
         egui::Window::new("Inventory")
             .collapsible(false)
             .resizable(false)

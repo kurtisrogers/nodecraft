@@ -204,13 +204,56 @@ pub fn notify_mobile_ui_ready(
 pub fn sync_mobile_menu_class(_player: Res<PlayerState>, _mobile: Res<MobileInput>) {}
 
 #[cfg(target_arch = "wasm32")]
-pub fn sync_mobile_menu_class(player: Res<PlayerState>, mobile: Res<MobileInput>) {
+pub fn sync_mobile_menu_class(_player: Res<PlayerState>, mobile: Res<MobileInput>) {
     if !mobile.is_mobile {
         return;
     }
-    set_body_class("menu-open", player.inventory_open);
+    // Never disable mobile HTML controls — egui inventory is desktop-only.
+    set_body_class("menu-open", false);
     set_body_class("playing", mobile.active);
 }
+
+#[cfg(target_arch = "wasm32")]
+fn update_dom_hotbar(index: usize) {
+    nc_update_mobile_hotbar(index as u32);
+}
+
+#[cfg(target_arch = "wasm32")]
+mod hotbar_dom {
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen]
+    extern "C" {
+        #[wasm_bindgen(js_namespace = window, js_name = ncUpdateMobileHotbar)]
+        pub fn nc_update_mobile_hotbar(index: u32);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+use hotbar_dom::nc_update_mobile_hotbar;
+
+#[cfg(target_arch = "wasm32")]
+pub fn sync_mobile_hotbar_ui(
+    inventory: Res<crate::inventory::GameInventory>,
+    mobile: Res<MobileInput>,
+    mut last: Local<Option<usize>>,
+) {
+    if !mobile.is_mobile {
+        return;
+    }
+    let index = inventory.hotbar_index;
+    if *last != Some(index) {
+        *last = Some(index);
+        update_dom_hotbar(index);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn sync_mobile_hotbar_ui(
+    _inventory: Res<crate::inventory::GameInventory>,
+    _mobile: Res<MobileInput>,
+    _last: Local<Option<usize>>,
+) {}
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_exports {

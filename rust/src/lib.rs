@@ -18,11 +18,15 @@ use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
 use config::DEFAULT_SEED;
 use meshing::{sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial, RemeshQueue, VoxelWorldResource};
-use mobile::{clear_mobile_frame, init_mobile, notify_mobile_ui_ready, sync_mobile_input, sync_mobile_menu_class, MobileInput};
+use mobile::{
+    clear_mobile_frame, init_mobile, notify_mobile_ui_ready, sync_mobile_hotbar_ui, sync_mobile_input,
+    sync_mobile_menu_class, MobileInput,
+};
 use mobs::{mob_attack_interaction, mob_ai, mob_spawner};
 use player::{
-    block_interaction, hotbar_keys, lock_cursor, mouse_look, player_movement, spawn_player,
-    sync_camera, toggle_inventory, update_terrain_ready, PlayerState,
+    block_interaction, hotbar_keys, lock_cursor, mobile_hotbar_cycle, mobile_session_start,
+    mouse_look, player_movement, spawn_player, sync_camera, toggle_inventory, update_terrain_ready,
+    PlayerState,
 };
 use ui::{draw_hud, setup_fog, update_fps, HudState};
 use weather::{update_day_night, update_lights};
@@ -86,9 +90,12 @@ pub fn run() {
             mob_attack_interaction,
             block_interaction,
             hotbar_keys,
+            mobile_hotbar_cycle,
             toggle_inventory,
             clear_mobile_frame,
             sync_mobile_menu_class,
+            sync_mobile_hotbar_ui,
+            mobile_session_start,
             notify_mobile_ui_ready,
         )
             .chain(),

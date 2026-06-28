@@ -207,6 +207,9 @@ pub fn player_movement(
     player.position = position;
     player.velocity = velocity;
     player.on_ground = result.on_ground;
+    if collision::overlaps_solid(&mut world.inner, player.position, PLAYER_AABB) {
+        collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+    }
     nudge_eye_clear(&mut world.inner, &mut player.position);
 
     if player.position.y < -10.0 {
@@ -442,12 +445,25 @@ pub fn toggle_inventory(
     mut player: ResMut<PlayerState>,
     mobile: Res<MobileInput>,
 ) {
+    if mobile.is_mobile {
+        return;
+    }
     if keys.just_pressed(KeyCode::KeyE) || mobile.inventory_pressed {
         player.inventory_open = !player.inventory_open;
     }
     if keys.just_pressed(KeyCode::Escape) {
         player.inventory_open = false;
     }
+}
+
+pub fn mobile_hotbar_cycle(
+    mut inventory: ResMut<GameInventory>,
+    mobile: Res<MobileInput>,
+) {
+    if !mobile.is_mobile || !mobile.inventory_pressed {
+        return;
+    }
+    inventory.hotbar_index = (inventory.hotbar_index + 1) % crate::config::HOTBAR_SIZE;
 }
 
 pub fn update_terrain_ready(
@@ -467,7 +483,25 @@ pub fn update_terrain_ready(
         return;
     }
     player.terrain_ready = true;
+    player.pitch = 0.0;
     collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+}
+
+pub fn mobile_session_start(
+    mut player: ResMut<PlayerState>,
+    mut world: ResMut<VoxelWorldResource>,
+    mobile: Res<MobileInput>,
+    mut was_active: Local<bool>,
+) {
+    if mobile.is_mobile {
+        player.inventory_open = false;
+    }
+    if mobile.active && !*was_active {
+        player.pitch = 0.0;
+        player.yaw = 0.0;
+        collision::ensure_clear(&mut world.inner, &mut player.position, PLAYER_AABB);
+    }
+    *was_active = mobile.active;
 }
 
 pub fn sync_camera(
