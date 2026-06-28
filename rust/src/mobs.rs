@@ -1,8 +1,8 @@
+use crate::collision::{self, Aabb};
 use crate::config::DAY_LENGTH_SECS;
 use crate::meshing::VoxelWorldResource;
 use crate::mobile::{is_controlling, MobileInput};
 use crate::player::PlayerState;
-use crate::world::VoxelWorld;
 use bevy::prelude::*;
 use rand::Rng;
 
@@ -63,6 +63,11 @@ impl MobType {
             Self::Zombie => Vec3::new(0.6, 1.8, 0.6),
         }
     }
+
+    fn aabb(self) -> Aabb {
+        let size = self.size();
+        Aabb::new(size.x * 0.5, size.z * 0.5, size.y)
+    }
 }
 
 #[derive(Component)]
@@ -95,6 +100,9 @@ pub fn mob_spawner(
 ) {
     manager.count = existing.iter().filter(|m| m.alive).count();
     if manager.count >= MOB_CAP {
+        return;
+    }
+    if !player.terrain_ready {
         return;
     }
     manager.spawn_timer -= time.delta_secs();
@@ -151,7 +159,7 @@ fn spawn_mob(
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::from_size(size))),
         MeshMaterial3d(mat),
-        Transform::from_translation(position + Vec3::Y * (size.y * 0.5 - 0.5)),
+        Transform::from_translation(position + Vec3::Y * size.y * 0.5),
         MobEntity {
             kind,
             health: kind.health(),
@@ -204,8 +212,10 @@ pub fn mob_ai(
             continue;
         }
 
-        let mut move_dir = Vec3::ZERO;
         let kind = mob.kind;
+        let aabb = kind.aabb();
+        let mut move_dir = Vec3::ZERO;
+
         if kind.hostile() && is_night {
             let to_player = player.position - transform.translation;
             let flat = Vec3::new(to_player.x, 0.0, to_player.z);
@@ -227,64 +237,23 @@ pub fn mob_ai(
         mob.velocity.z = move_dir.z * kind.speed();
         mob.velocity.y -= 20.0 * dt;
 
-        transform.translation.x += mob.velocity.x * dt;
-        collide_mob_axis(&mut transform.translation, &mut mob.velocity, &mut world.inner, kind, 'x');
-        transform.translation.z += mob.velocity.z * dt;
-        collide_mob_axis(&mut transform.translation, &mut mob.velocity, &mut world.inner, kind, 'z');
-        transform.translation.y += mob.velocity.y * dt;
-        collide_mob_axis(&mut transform.translation, &mut mob.velocity, &mut world.inner, kind, 'y');
+        let mut feet = transform.translation - Vec3::Y * aabb.height * 0.5;
+        let result = collision::move_aabb(
+            &mut world.inner,
+            &mut feet,
+            &mut mob.velocity,
+            aabb,
+            dt,
+            true,
+        );
+        transform.translation = feet + Vec3::Y * aabb.height * 0.5;
+
+        if result.on_ground && mob.velocity.y < 0.0 {
+            mob.velocity.y = 0.0;
+        }
 
         if move_dir.length_squared() > 0.01 {
             transform.rotation = Quat::from_rotation_y(move_dir.x.atan2(move_dir.z));
-        }
-    }
-}
-
-fn collide_mob_axis(pos: &mut Vec3, vel: &mut Vec3, world: &mut VoxelWorld, kind: MobType, axis: char) {
-    let size = kind.size();
-    let hw = size.x * 0.5;
-    let hd = size.z * 0.5;
-    let min_x = (pos.x - hw).floor() as i32;
-    let max_x = (pos.x + hw).floor() as i32;
-    let min_y = pos.y.floor() as i32;
-    let max_y = (pos.y + size.y).floor() as i32;
-    let min_z = (pos.z - hd).floor() as i32;
-    let max_z = (pos.z + hd).floor() as i32;
-
-    for x in min_x..=max_x {
-        for y in min_y..=max_y {
-            for z in min_z..=max_z {
-                if !world.get_block(x, y, z).solid() {
-                    continue;
-                }
-                match axis {
-                    'x' => {
-                        if vel.x > 0.0 {
-                            pos.x = x as f32 - hw - 0.01;
-                        } else if vel.x < 0.0 {
-                            pos.x = x as f32 + 1.0 + hw + 0.01;
-                        }
-                        vel.x = 0.0;
-                    }
-                    'z' => {
-                        if vel.z > 0.0 {
-                            pos.z = z as f32 - hd - 0.01;
-                        } else if vel.z < 0.0 {
-                            pos.z = z as f32 + 1.0 + hd + 0.01;
-                        }
-                        vel.z = 0.0;
-                    }
-                    _ => {
-                        if vel.y < 0.0 {
-                            pos.y = y as f32 + 1.0;
-                            vel.y = 0.0;
-                        } else if vel.y > 0.0 {
-                            pos.y = y as f32 - size.y - 0.01;
-                            vel.y = 0.0;
-                        }
-                    }
-                }
-            }
         }
     }
 }

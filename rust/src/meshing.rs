@@ -18,6 +18,49 @@ pub struct ChunkMaterial(pub Handle<StandardMaterial>);
 #[derive(Resource, Default)]
 pub struct RemeshQueue {
     pub keys: Vec<(i32, i32)>,
+    pending: std::collections::HashSet<(i32, i32)>,
+}
+
+impl RemeshQueue {
+    pub fn push(&mut self, key: (i32, i32)) {
+        if self.pending.insert(key) {
+            self.keys.push(key);
+        }
+    }
+
+    pub fn pop_nearest(&mut self, player_chunk: (i32, i32)) -> Option<(i32, i32)> {
+        if self.keys.is_empty() {
+            return None;
+        }
+        let (pcx, pcz) = player_chunk;
+        let best_idx = self
+            .keys
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, (cx, cz))| {
+                let dx = cx - pcx;
+                let dz = cz - pcz;
+                dx * dx + dz * dz
+            })
+            .map(|(idx, _)| idx)?;
+        let key = self.keys.swap_remove(best_idx);
+        self.pending.remove(&key);
+        Some(key)
+    }
+
+    pub fn clear_pending(&mut self) {
+        self.pending.clear();
+    }
+
+    fn retain_loaded(&mut self, loaded: &std::collections::HashSet<(i32, i32)>) {
+        self.keys.retain(|key| loaded.contains(key));
+        self.pending.retain(|key| loaded.contains(key));
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct ChunkEntityMap {
+    pub entities: std::collections::HashMap<(i32, i32), Entity>,
 }
 
 pub fn build_chunk_mesh(world: &VoxelWorld, chunk_x: i32, chunk_z: i32) -> Option<Mesh> {
@@ -41,10 +84,10 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_x: i32, chunk_z: i32) -> Optio
         return None;
     }
 
-    let mut positions: Vec<[f32; 3]> = Vec::new();
-    let mut normals: Vec<[f32; 3]> = Vec::new();
-    let mut colors: Vec<[f32; 4]> = Vec::new();
-    let mut indices: Vec<u32> = Vec::new();
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(4096);
+    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(4096);
+    let mut colors: Vec<[f32; 4]> = Vec::with_capacity(4096);
+    let mut indices: Vec<u32> = Vec::with_capacity(6144);
 
     let dirs: [([i32; 3], Face); 6] = [
         ([0, 1, 0], Face::Top),
@@ -201,57 +244,66 @@ pub fn sync_chunk_meshes(
     mut meshes: ResMut<Assets<Mesh>>,
     chunk_mat: Res<ChunkMaterial>,
     mut queue: ResMut<RemeshQueue>,
-    existing: Query<(Entity, &ChunkMesh)>,
+    mut entity_map: ResMut<ChunkEntityMap>,
 ) {
-    let mut budget = if cfg!(target_arch = "wasm32") { 8 } else { 4 };
+    let mut budget = if cfg!(target_arch = "wasm32") { 6 } else { 4 };
     let player_chunk = world.player_chunk;
     let loaded: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
 
-    for (entity, mesh) in existing.iter() {
-        if !loaded.contains(&(mesh.chunk_x, mesh.chunk_z)) {
-            commands.entity(entity).despawn();
+    entity_map.entities.retain(|key, entity| {
+        if loaded.contains(key) {
+            true
+        } else {
+            commands.entity(*entity).despawn();
+            false
         }
-    }
+    });
+    queue.retain_loaded(&loaded);
 
     if queue.keys.is_empty() {
         for &(cx, cz) in &world.loaded_chunks {
             if let Some(chunk) = world.inner.chunks.get(&(cx, cz)) {
                 if chunk.dirty {
-                    queue.keys.push((cx, cz));
+                    queue.push((cx, cz));
                 }
             }
         }
     }
 
     while budget > 0 {
-        let Some((cx, cz)) = queue.keys.pop() else { break };
+        let Some((cx, cz)) = queue.pop_nearest(player_chunk) else { break };
         budget -= 1;
 
-        for (entity, mesh) in existing.iter() {
-            if mesh.chunk_x == cx && mesh.chunk_z == cz {
-                commands.entity(entity).despawn();
-            }
-        }
-
-        if let Some(mesh) = build_chunk_mesh(&world.inner, cx, cz) {
-            let handle = meshes.add(mesh);
-            commands.spawn((
-                Mesh3d(handle),
-                MeshMaterial3d(chunk_mat.0.clone()),
-                Transform::from_xyz(
-                    (cx * CHUNK_SIZE) as f32,
-                    0.0,
-                    (cz * CHUNK_SIZE) as f32,
-                ),
-                ChunkMesh { chunk_x: cx, chunk_z: cz },
-            ));
-        }
         if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
             chunk.dirty = false;
         }
-    }
 
-    let _ = player_chunk;
+        let Some(mesh) = build_chunk_mesh(&world.inner, cx, cz) else {
+            if let Some(entity) = entity_map.entities.remove(&(cx, cz)) {
+                commands.entity(entity).despawn();
+            }
+            continue;
+        };
+
+        let handle = meshes.add(mesh);
+        if let Some(&entity) = entity_map.entities.get(&(cx, cz)) {
+            commands.entity(entity).insert(Mesh3d(handle));
+        } else {
+            let entity = commands
+                .spawn((
+                    Mesh3d(handle),
+                    MeshMaterial3d(chunk_mat.0.clone()),
+                    Transform::from_xyz(
+                        (cx * CHUNK_SIZE) as f32,
+                        0.0,
+                        (cz * CHUNK_SIZE) as f32,
+                    ),
+                    ChunkMesh { chunk_x: cx, chunk_z: cz },
+                ))
+                .id();
+            entity_map.entities.insert((cx, cz), entity);
+        }
+    }
 }
 
 #[derive(Resource)]
@@ -288,7 +340,7 @@ pub fn update_world_chunks(
         world.inner.unload_distant_chunks(px, pz);
         for &(cx, cz) in &world.loaded_chunks {
             if !previous.contains(&(cx, cz)) {
-                queue.keys.push((cx, cz));
+                queue.push((cx, cz));
             }
         }
     }
