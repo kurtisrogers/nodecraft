@@ -190,6 +190,7 @@ pub fn notify_mobile_ui_ready(
     *notified = true;
     set_body_class("mobile", true);
     set_body_class("ready", true);
+    crate::wasm_entry::dismiss_loading_screen();
 }
 
 #[cfg(not(target_arch = "wasm32"))]

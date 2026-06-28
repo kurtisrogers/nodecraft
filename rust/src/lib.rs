@@ -143,7 +143,20 @@ pub fn run() {
         app.add_systems(Update, draw_hud);
     }
 
+    if wasm {
+        app.add_systems(Update, dismiss_loading_screen_once);
+    }
+
     app.run();
+}
+
+#[cfg(target_arch = "wasm32")]
+fn dismiss_loading_screen_once(mut dismissed: Local<bool>) {
+    if *dismissed {
+        return;
+    }
+    *dismissed = true;
+    wasm_entry::dismiss_loading_screen();
 }
 
 fn setup_scene(
@@ -206,9 +219,7 @@ fn init_world(
     world.loaded_chunks = world.inner.load_chunks_around(px, pz);
     let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
     world.inner.retain_chunks(&loaded_set);
-    if cfg!(target_arch = "wasm32") {
-        crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 96);
-    } else {
+    if cfg!(not(target_arch = "wasm32")) {
         crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
     }
     for &(cx, cz) in &world.loaded_chunks.clone() {
@@ -234,6 +245,10 @@ pub(crate) mod wasm_entry {
         if let Ok(html_element) = element.dyn_into::<web_sys::HtmlElement>() {
             let _ = html_element.class_list().add_1("hidden");
         }
+    }
+
+    pub(crate) fn dismiss_loading_screen() {
+        hide_loading_overlay();
     }
 
     pub(crate) fn hide_loading_overlay_if_ready(chunk_count: usize) {

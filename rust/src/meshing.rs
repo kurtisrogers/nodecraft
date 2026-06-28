@@ -402,9 +402,23 @@ pub fn update_world_chunks(
     mut world: ResMut<VoxelWorldResource>,
     mut queue: ResMut<RemeshQueue>,
     player: Res<PlayerState>,
+    mut wasm_settlements: Local<bool>,
 ) {
     let px = player.position.x.floor() as i32;
     let pz = player.position.z.floor() as i32;
+
+    #[cfg(target_arch = "wasm32")]
+    if !*wasm_settlements {
+        *wasm_settlements = true;
+        crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 96);
+        for &(cx, cz) in &world.loaded_chunks.clone() {
+            if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
+                chunk.dirty = true;
+            }
+            queue.push((cx, cz));
+        }
+    }
+
     let new_chunk = (px.div_euclid(CHUNK_SIZE), pz.div_euclid(CHUNK_SIZE));
     if new_chunk != world.player_chunk {
         world.player_chunk = new_chunk;
@@ -442,28 +456,10 @@ pub fn bootstrap_player_meshes(
     mut entity_map: ResMut<ChunkEntityMap>,
     mut queue: ResMut<RemeshQueue>,
 ) {
-    if cfg!(target_arch = "wasm32") {
-        for (cx, cz) in world.loaded_chunks.clone() {
-            mesh_chunk_entity(
-                &mut commands,
-                &mut world,
-                &mut meshes,
-                &chunk_mat,
-                &mut entity_map,
-                &mut queue,
-                cx,
-                cz,
-            );
-        }
-        if !entity_map.entities.is_empty() {
-            crate::wasm_entry::hide_loading_overlay_if_ready(entity_map.entities.len());
-        }
-        return;
-    }
-
     let (pcx, pcz) = world.player_chunk;
-    for dx in -1i32..=1 {
-        for dz in -1i32..=1 {
+    let radius = if cfg!(target_arch = "wasm32") { 2 } else { 1 };
+    for dx in -radius..=radius {
+        for dz in -radius..=radius {
             mesh_chunk_entity(
                 &mut commands,
                 &mut world,
@@ -475,6 +471,9 @@ pub fn bootstrap_player_meshes(
                 pcz + dz,
             );
         }
+    }
+    if cfg!(target_arch = "wasm32") && !entity_map.entities.is_empty() {
+        crate::wasm_entry::hide_loading_overlay_if_ready(entity_map.entities.len());
     }
 }
 
