@@ -19,6 +19,10 @@
       touch-action: none;
     }
     canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* WASM canvas must never steal touches on mobile — overlay handles all input */
+    body.mobile canvas {
+      pointer-events: none !important;
+    }
     #loading {
       position: fixed;
       inset: 0;
@@ -64,8 +68,21 @@
     body.mobile.playing #mobile-hotbar {
       display: flex;
     }
-    /* Let DOM overlay receive touches until playing; canvas handles look after */
-    body.mobile:not(.playing) canvas {
+
+    #look-zone {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 65%;
+      height: 100%;
+      pointer-events: none;
+      touch-action: none;
+    }
+    body.mobile.playing #look-zone {
+      pointer-events: auto;
+    }
+
+    body.menu-open #look-zone {
       pointer-events: none;
     }
 
@@ -197,6 +214,7 @@
 
   <div id="mobile-controls">
     <button id="mobile-start" class="mobile-start-btn" type="button">Tap to Play</button>
+    <div id="look-zone" aria-label="Look around"></div>
     <div id="joystick" aria-label="Move">
       <div id="joystick-knob"></div>
     </div>
@@ -291,13 +309,31 @@
 
         const joystick = document.getElementById('joystick');
         const knob = document.getElementById('joystick-knob');
-        if (!joystick || !knob) return;
+        const lookZone = document.getElementById('look-zone');
+        if (!joystick || !knob || !lookZone) return;
 
         let joystickTouchId = null;
         let lookTouchId = null;
         let joystickCenter = { x: 0, y: 0 };
         let joystickRadius = 50;
         let lookTouch = { x: 0, y: 0 };
+
+        function findTouch(list, id) {
+          for (let i = 0; i < list.length; i++) {
+            if (list[i].identifier === id) return list[i];
+          }
+          return null;
+        }
+
+        function pointInJoystick(clientX, clientY) {
+          const rect = joystick.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const r = rect.width / 2;
+          const dx = clientX - cx;
+          const dy = clientY - cy;
+          return dx * dx + dy * dy <= r * r;
+        }
 
         function resetJoystick() {
           joystickTouchId = null;
@@ -319,11 +355,22 @@
           w.nc_mobile_set_move(nx, ny);
         }
 
+        function handleLookMove(touch) {
+          const dx = touch.clientX - lookTouch.x;
+          const dy = touch.clientY - lookTouch.y;
+          lookTouch = { x: touch.clientX, y: touch.clientY };
+          if (dx !== 0 || dy !== 0) {
+            w.nc_mobile_add_look(dx * TOUCH_LOOK_SENSITIVITY, -dy * TOUCH_LOOK_SENSITIVITY);
+          }
+        }
+
         joystick.addEventListener('touchstart', (e) => {
           if (!canUseGameplayControls()) return;
           e.preventDefault();
-          const touch = [...e.changedTouches].find((t) => joystick.contains(t.target));
-          if (!touch || joystickTouchId !== null) return;
+          e.stopPropagation();
+          if (joystickTouchId !== null) return;
+          const touch = e.changedTouches[0];
+          if (!touch || !pointInJoystick(touch.clientX, touch.clientY)) return;
           joystickTouchId = touch.identifier;
           const rect = joystick.getBoundingClientRect();
           joystickCenter = {
@@ -334,58 +381,68 @@
           updateJoystick(touch.clientX, touch.clientY);
         }, { passive: false });
 
+        lookZone.addEventListener('touchstart', (e) => {
+          if (!canUseGameplayControls() || lookTouchId !== null) return;
+          const touch = e.changedTouches[0];
+          if (!touch) return;
+          e.preventDefault();
+          e.stopPropagation();
+          lookTouchId = touch.identifier;
+          lookTouch = { x: touch.clientX, y: touch.clientY };
+        }, { passive: false });
+
         document.addEventListener('touchmove', (e) => {
+          let handled = false;
+
           if (joystickTouchId !== null) {
             if (!canUseGameplayControls()) {
               resetJoystick();
-              return;
+            } else {
+              const touch =
+                findTouch(e.touches, joystickTouchId) ||
+                findTouch(e.changedTouches, joystickTouchId);
+              if (touch) {
+                e.preventDefault();
+                updateJoystick(touch.clientX, touch.clientY);
+                handled = true;
+              }
             }
-            const touch = [...e.changedTouches].find((t) => t.identifier === joystickTouchId);
-            if (!touch) return;
-            e.preventDefault();
-            updateJoystick(touch.clientX, touch.clientY);
           }
 
           if (lookTouchId !== null) {
             if (!canUseGameplayControls()) {
               lookTouchId = null;
-              return;
+            } else {
+              const touch =
+                findTouch(e.touches, lookTouchId) ||
+                findTouch(e.changedTouches, lookTouchId);
+              if (touch) {
+                e.preventDefault();
+                handleLookMove(touch);
+                handled = true;
+              }
             }
-            const touch = [...e.changedTouches].find((t) => t.identifier === lookTouchId);
-            if (!touch) return;
-            e.preventDefault();
-            const dx = touch.clientX - lookTouch.x;
-            const dy = touch.clientY - lookTouch.y;
-            lookTouch = { x: touch.clientX, y: touch.clientY };
-            w.nc_mobile_add_look(dx * TOUCH_LOOK_SENSITIVITY, -dy * TOUCH_LOOK_SENSITIVITY);
           }
-        }, { passive: false });
 
-        document.addEventListener('touchend', (e) => {
-          const joyTouch = [...e.changedTouches].find((t) => t.identifier === joystickTouchId);
-          if (joyTouch) resetJoystick();
-
-          const lookEnd = [...e.changedTouches].find((t) => t.identifier === lookTouchId);
-          if (lookEnd) lookTouchId = null;
-        });
-        document.addEventListener('touchcancel', (e) => {
-          const joyTouch = [...e.changedTouches].find((t) => t.identifier === joystickTouchId);
-          if (joyTouch) resetJoystick();
-
-          const lookEnd = [...e.changedTouches].find((t) => t.identifier === lookTouchId);
-          if (lookEnd) lookTouchId = null;
-        });
-
-        document.addEventListener('touchstart', (e) => {
-          if (!canUseGameplayControls() || lookTouchId !== null) return;
-          const touch = e.changedTouches[0];
-          if (!touch) return;
-          if (touch.target.closest('.mobile-btn, #joystick, #mobile-hotbar, #mobile-start')) return;
-          if (touch.clientX <= window.innerWidth * 0.35) return;
-          e.preventDefault();
-          lookTouchId = touch.identifier;
-          lookTouch = { x: touch.clientX, y: touch.clientY };
+          if (handled) {
+            e.stopPropagation();
+          }
         }, { passive: false, capture: true });
+
+        function endTouches(e) {
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            const touch = e.changedTouches[i];
+            if (touch.identifier === joystickTouchId) {
+              resetJoystick();
+            }
+            if (touch.identifier === lookTouchId) {
+              lookTouchId = null;
+            }
+          }
+        }
+
+        document.addEventListener('touchend', endTouches, { passive: false });
+        document.addEventListener('touchcancel', endTouches, { passive: false });
 
         function bindButton(id, onDown, onUp) {
           const el = document.getElementById(id);

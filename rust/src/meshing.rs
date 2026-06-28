@@ -203,7 +203,7 @@ pub fn sync_chunk_meshes(
     mut queue: ResMut<RemeshQueue>,
     existing: Query<(Entity, &ChunkMesh)>,
 ) {
-    let mut budget = if cfg!(target_arch = "wasm32") { 6 } else { 4 };
+    let mut budget = if cfg!(target_arch = "wasm32") { 8 } else { 4 };
     let player_chunk = world.player_chunk;
     let loaded: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
 

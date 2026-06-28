@@ -10,6 +10,7 @@ pub struct MobileInput {
     pub active: bool,
     pub move_vec: Vec2,
     pub jump: bool,
+    pub jump_pressed: bool,
     pub sprint: bool,
     pub look_delta: Vec2,
     pub break_pressed: bool,
@@ -24,6 +25,7 @@ struct PendingMobileInput {
     active: bool,
     move_vec: Vec2,
     jump: bool,
+    jump_was: bool,
     sprint: bool,
     look_delta: Vec2,
     break_pressed: bool,
@@ -37,6 +39,7 @@ static PENDING: Mutex<PendingMobileInput> = Mutex::new(PendingMobileInput {
     active: false,
     move_vec: Vec2::new(0.0, 0.0),
     jump: false,
+    jump_was: false,
     sprint: false,
     look_delta: Vec2::new(0.0, 0.0),
     break_pressed: false,
@@ -118,6 +121,7 @@ pub fn sync_mobile_input(mut mobile: ResMut<MobileInput>) {
         mobile.active = pending.active;
         mobile.move_vec = pending.move_vec;
         mobile.jump = pending.jump;
+        mobile.jump_pressed = pending.jump && !pending.jump_was;
         mobile.sprint = pending.sprint;
         mobile.look_delta += pending.look_delta;
         mobile.break_pressed |= pending.break_pressed;
@@ -129,6 +133,7 @@ pub fn sync_mobile_input(mut mobile: ResMut<MobileInput>) {
     }
 
     with_pending(|pending| {
+        pending.jump_was = pending.jump;
         pending.look_delta = Vec2::ZERO;
         pending.break_pressed = false;
         pending.place_pressed = false;
@@ -179,7 +184,7 @@ pub fn notify_mobile_ui_ready(
     let near_meshed = meshes.iter().any(|mesh| {
         (mesh.chunk_x - pcx).abs() <= 1 && (mesh.chunk_z - pcz).abs() <= 1
     });
-    if !near_meshed && *wait_frames < 240 {
+    if !near_meshed && *wait_frames < 360 {
         return;
     }
     *notified = true;

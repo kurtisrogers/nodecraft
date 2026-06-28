@@ -21,7 +21,7 @@ use mobile::{clear_mobile_frame, init_mobile, notify_mobile_ui_ready, sync_mobil
 use mobs::{mob_attack_interaction, mob_ai, mob_spawner, MobManager};
 use player::{
     block_interaction, hotbar_keys, lock_cursor, mouse_look, player_movement, spawn_player,
-    sync_camera, toggle_inventory, PlayerCamera, PlayerState,
+    sync_camera, toggle_inventory, update_terrain_ready, PlayerCamera, PlayerState,
 };
 use ui::{draw_hud, setup_fog, update_fps, HudState};
 use weather::{update_day_night, update_lights};
@@ -98,6 +98,7 @@ pub fn run() {
             mob_ai,
             update_world_chunks,
             sync_chunk_meshes,
+            update_terrain_ready,
             update_day_night,
             update_lights,
             update_fps,

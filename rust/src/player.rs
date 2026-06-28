@@ -4,7 +4,7 @@ use crate::config::{
     WALK_SPEED, WORLD_HEIGHT,
 };
 use crate::inventory::GameInventory;
-use crate::meshing::{RemeshQueue, VoxelWorldResource};
+use crate::meshing::{ChunkMesh, RemeshQueue, VoxelWorldResource};
 use crate::mobile::{is_controlling, MobileInput};
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -23,6 +23,7 @@ pub struct PlayerState {
     pub lava_timer: f32,
     pub cursor_locked: bool,
     pub inventory_open: bool,
+    pub terrain_ready: bool,
 }
 
 impl Default for PlayerState {
@@ -38,6 +39,7 @@ impl Default for PlayerState {
             lava_timer: 0.0,
             cursor_locked: false,
             inventory_open: false,
+            terrain_ready: false,
         }
     }
 }
@@ -53,6 +55,7 @@ pub fn spawn_player(
     let spawn = world.inner.find_safe_spawn(0, 0);
     player.position = Vec3::new(spawn.0, spawn.1, spawn.2);
     player.velocity = Vec3::ZERO;
+    ensure_player_clear(&mut world.inner, &mut player.position);
 
     commands.spawn((
         Camera3d::default(),
@@ -148,6 +151,10 @@ pub fn player_movement(
     mut world: ResMut<VoxelWorldResource>,
     mobile: Res<MobileInput>,
 ) {
+    if !player.terrain_ready {
+        player.velocity = Vec3::ZERO;
+        return;
+    }
     if player.inventory_open {
         return;
     }
@@ -182,7 +189,7 @@ pub fn player_movement(
     player.velocity.z = wish.z;
     player.velocity.y += GRAVITY * dt;
 
-    if player.on_ground && (keys.just_pressed(KeyCode::Space) || mobile.jump) {
+    if player.on_ground && (keys.just_pressed(KeyCode::Space) || mobile.jump_pressed) {
         player.velocity.y = JUMP_VELOCITY;
         player.on_ground = false;
     }
@@ -196,6 +203,7 @@ pub fn player_movement(
         player.position = Vec3::new(spawn.0, spawn.1, spawn.2);
         player.velocity = Vec3::ZERO;
         player.health = 20;
+        ensure_player_clear(&mut world.inner, &mut player.position);
     }
 
     player.attack_cooldown = (player.attack_cooldown - dt).max(0.0);
@@ -217,61 +225,146 @@ fn feet_in_lava(world: &mut crate::world::VoxelWorld, player: &PlayerState) -> b
 
 fn move_with_collision(player: &mut PlayerState, world: &mut crate::world::VoxelWorld, dt: f32) {
     let half = PLAYER_WIDTH * 0.5;
+    let was_on_ground = player.on_ground;
     player.on_ground = false;
 
-    player.position.x += player.velocity.x * dt;
-    resolve_axis(
-        world,
-        &mut player.position,
-        half,
-        PLAYER_HEIGHT,
-        0,
-        player.velocity.x.signum(),
-    );
-
-    player.position.z += player.velocity.z * dt;
-    resolve_axis(
-        world,
-        &mut player.position,
-        half,
-        PLAYER_HEIGHT,
-        2,
-        player.velocity.z.signum(),
-    );
-
-    let vy_before = player.velocity.y;
-    player.position.y += player.velocity.y * dt;
-    let landed = resolve_axis(
-        world,
-        &mut player.position,
-        half,
-        PLAYER_HEIGHT,
-        1,
-        vy_before.signum(),
-    );
-    if landed && vy_before <= 0.0 {
-        player.on_ground = true;
-        player.velocity.y = 0.0;
+    if was_on_ground {
+        try_step_up(player, world, half, dt);
     }
 
-    for _ in 0..4 {
+    let max_step = 0.45_f32;
+    let steps = ((player.velocity.length() * dt) / max_step).ceil().max(1.0) as u32;
+    let sub_dt = dt / steps as f32;
+
+    for _ in 0..steps {
+        let vy_before = player.velocity.y;
+
+        player.position.x += player.velocity.x * sub_dt;
+        resolve_axis(
+            world,
+            &mut player.position,
+            half,
+            PLAYER_HEIGHT,
+            0,
+            player.velocity.x.signum(),
+        );
+
+        player.position.z += player.velocity.z * sub_dt;
+        resolve_axis(
+            world,
+            &mut player.position,
+            half,
+            PLAYER_HEIGHT,
+            2,
+            player.velocity.z.signum(),
+        );
+
+        player.position.y += player.velocity.y * sub_dt;
+        let landed = resolve_axis(
+            world,
+            &mut player.position,
+            half,
+            PLAYER_HEIGHT,
+            1,
+            vy_before.signum(),
+        );
+        if landed && vy_before <= 0.0 {
+            player.on_ground = true;
+            player.velocity.y = 0.0;
+        }
+    }
+
+    for _ in 0..8 {
         if !depenetrate_player(world, &mut player.position, half, PLAYER_HEIGHT) {
             break;
         }
     }
     nudge_eye_clear(world, &mut player.position, half);
+    snap_to_ground(player, world, half);
 }
 
-fn resolve_axis(
+const STEP_HEIGHT: f32 = 0.62;
+
+fn try_step_up(player: &mut PlayerState, world: &mut crate::world::VoxelWorld, half: f32, dt: f32) {
+    let wish_x = player.velocity.x * dt;
+    let wish_z = player.velocity.z * dt;
+    if wish_x.abs() < 1e-4 && wish_z.abs() < 1e-4 {
+        return;
+    }
+
+    let saved = player.position;
+    let raised = saved + Vec3::new(0.0, STEP_HEIGHT, 0.0);
+    if !volume_clear(world, raised, half, PLAYER_HEIGHT) {
+        return;
+    }
+
+    let mut test = raised;
+    test.x += wish_x;
+    resolve_axis(world, &mut test, half, PLAYER_HEIGHT, 0, wish_x.signum());
+    test.z += wish_z;
+    resolve_axis(world, &mut test, half, PLAYER_HEIGHT, 2, wish_z.signum());
+
+    if !overlaps_solid(world, test, half, PLAYER_HEIGHT) {
+        player.position = test;
+    }
+}
+
+fn snap_to_ground(
+    player: &mut PlayerState,
     world: &mut crate::world::VoxelWorld,
-    pos: &mut Vec3,
+    half: f32,
+) {
+    if player.velocity.y > 0.5 {
+        return;
+    }
+    let floor_y = ground_height(world, player.position.x, player.position.z);
+    let Some(floor_y) = floor_y else {
+        return;
+    };
+    let target = floor_y + 0.001;
+    let gap = player.position.y - target;
+    if gap > -0.08 && gap < 0.22 {
+        player.position.y = target;
+        player.velocity.y = 0.0;
+        player.on_ground = true;
+    }
+    let _ = half;
+}
+
+fn ground_height(world: &mut crate::world::VoxelWorld, x: f32, z: f32) -> Option<f32> {
+    let bx = x.floor() as i32;
+    let bz = z.floor() as i32;
+    for y in (0..WORLD_HEIGHT).rev() {
+        if world.get_block(bx, y, bz).solid() {
+            return Some(y as f32 + 1.0);
+        }
+    }
+    None
+}
+
+fn player_aabb(pos: Vec3, half: f32, height: f32) -> ([f32; 3], [f32; 3]) {
+    (
+        [pos.x - half, pos.y, pos.z - half],
+        [pos.x + half, pos.y + height, pos.z + half],
+    )
+}
+
+fn volume_clear(
+    world: &mut crate::world::VoxelWorld,
+    pos: Vec3,
     half: f32,
     height: f32,
-    axis: usize,
-    velocity_sign: f32,
 ) -> bool {
-    let min = [pos.x - half, pos.y, pos.z - half];
-    let max = [pos.x + half, pos.y + height, pos.z + half];
+    !overlaps_solid(world, pos, half, height)
+}
+
+fn overlaps_solid(
+    world: &mut crate::world::VoxelWorld,
+    pos: Vec3,
+    half: f32,
+    height: f32,
+) -> bool {
+    let (min, max) = player_aabb(pos, half, height);
     let min_b = [
         min[0].floor() as i32,
         min[1].floor() as i32,
@@ -283,67 +376,187 @@ fn resolve_axis(
         (max[2] - 0.001).floor() as i32,
     ];
 
-    let mut hit = false;
     for bx in min_b[0]..=max_b[0] {
         for by in min_b[1]..=max_b[1] {
             for bz in min_b[2]..=max_b[2] {
-                if !world.get_block(bx, by, bz).solid() {
-                    continue;
+                if world.get_block(bx, by, bz).solid() {
+                    return true;
                 }
-                let block_min = Vec3::new(bx as f32, by as f32, bz as f32);
-                let block_max = block_min + Vec3::ONE;
-                if max[0] <= block_min.x
-                    || min[0] >= block_max.x
-                    || max[1] <= block_min.y
-                    || min[1] >= block_max.y
-                    || max[2] <= block_min.z
-                    || min[2] >= block_max.z
-                {
-                    continue;
+            }
+        }
+    }
+    false
+}
+
+fn ensure_player_clear(world: &mut crate::world::VoxelWorld, pos: &mut Vec3) {
+    let half = PLAYER_WIDTH * 0.5;
+    for _ in 0..12 {
+        if !depenetrate_player(world, pos, half, PLAYER_HEIGHT) {
+            break;
+        }
+    }
+    nudge_eye_clear(world, pos, half);
+    if overlaps_solid(world, *pos, half, PLAYER_HEIGHT) {
+        if let Some(floor_y) = ground_height(world, pos.x, pos.z) {
+            pos.y = floor_y + 0.5;
+            for _ in 0..8 {
+                if !depenetrate_player(world, pos, half, PLAYER_HEIGHT) {
+                    break;
                 }
-                hit = true;
-                match axis {
-                    0 => {
-                        let overlap_left = (pos.x + half) - block_min.x;
-                        let overlap_right = block_max.x - (pos.x - half);
-                        if velocity_sign < 0.0 {
-                            pos.x = block_min.x - half - 0.001;
-                        } else if velocity_sign > 0.0 {
-                            pos.x = block_max.x + half + 0.001;
-                        } else if overlap_left < overlap_right {
-                            pos.x = block_min.x - half - 0.001;
-                        } else {
-                            pos.x = block_max.x + half + 0.001;
+            }
+        }
+    }
+}
+
+fn resolve_axis(
+    world: &mut crate::world::VoxelWorld,
+    pos: &mut Vec3,
+    half: f32,
+    height: f32,
+    axis: usize,
+    velocity_sign: f32,
+) -> bool {
+    const EPS: f32 = 0.001;
+    let min = [pos.x - half, pos.y, pos.z - half];
+    let max = [pos.x + half, pos.y + height, pos.z + half];
+    let min_b = [
+        min[0].floor() as i32,
+        min[1].floor() as i32,
+        min[2].floor() as i32,
+    ];
+    let max_b = [
+        (max[0] - EPS).floor() as i32,
+        (max[1] - EPS).floor() as i32,
+        (max[2] - EPS).floor() as i32,
+    ];
+
+    let mut hit = false;
+    match axis {
+        0 => {
+            let mut new_x = pos.x;
+            let mut push_left = 0.0_f32;
+            let mut push_right = 0.0_f32;
+            for bx in min_b[0]..=max_b[0] {
+                for by in min_b[1]..=max_b[1] {
+                    for bz in min_b[2]..=max_b[2] {
+                        if !world.get_block(bx, by, bz).solid() {
+                            continue;
                         }
-                    }
-                    1 => {
-                        let overlap_below = (pos.y + height) - block_min.y;
-                        let overlap_above = block_max.y - pos.y;
+                        let block_min = bx as f32;
+                        let block_max = block_min + 1.0;
+                        if max[0] <= block_min
+                            || min[0] >= block_max
+                            || max[1] <= by as f32
+                            || min[1] >= (by + 1) as f32
+                            || max[2] <= bz as f32
+                            || min[2] >= (bz + 1) as f32
+                        {
+                            continue;
+                        }
+                        hit = true;
                         if velocity_sign > 0.0 {
-                            pos.y = block_min.y - height - 0.001;
+                            new_x = new_x.min(block_min - half - EPS);
                         } else if velocity_sign < 0.0 {
-                            pos.y = block_max.y + 0.001;
-                        } else if overlap_below < overlap_above {
-                            pos.y = block_min.y - height - 0.001;
+                            new_x = new_x.max(block_max + half + EPS);
                         } else {
-                            pos.y = block_max.y + 0.001;
-                        }
-                    }
-                    _ => {
-                        let overlap_near = (pos.z + half) - block_min.z;
-                        let overlap_far = block_max.z - (pos.z - half);
-                        if velocity_sign < 0.0 {
-                            pos.z = block_min.z - half - 0.001;
-                        } else if velocity_sign > 0.0 {
-                            pos.z = block_max.z + half + 0.001;
-                        } else if overlap_near < overlap_far {
-                            pos.z = block_min.z - half - 0.001;
-                        } else {
-                            pos.z = block_max.z + half + 0.001;
+                            push_left = push_left.max((pos.x + half) - block_min);
+                            push_right = push_right.max(block_max - (pos.x - half));
                         }
                     }
                 }
             }
+            if velocity_sign == 0.0 && (push_left > 0.0 || push_right > 0.0) {
+                new_x = if push_left < push_right {
+                    pos.x - push_left - EPS
+                } else {
+                    pos.x + push_right + EPS
+                };
+            }
+            pos.x = new_x;
+        }
+        1 => {
+            let mut new_y = pos.y;
+            let mut push_down = 0.0_f32;
+            let mut push_up = 0.0_f32;
+            for bx in min_b[0]..=max_b[0] {
+                for by in min_b[1]..=max_b[1] {
+                    for bz in min_b[2]..=max_b[2] {
+                        if !world.get_block(bx, by, bz).solid() {
+                            continue;
+                        }
+                        let block_min = by as f32;
+                        let block_max = block_min + 1.0;
+                        if max[0] <= bx as f32
+                            || min[0] >= (bx + 1) as f32
+                            || max[1] <= block_min
+                            || min[1] >= block_max
+                            || max[2] <= bz as f32
+                            || min[2] >= (bz + 1) as f32
+                        {
+                            continue;
+                        }
+                        hit = true;
+                        if velocity_sign > 0.0 {
+                            new_y = new_y.min(block_min - height - EPS);
+                        } else if velocity_sign < 0.0 {
+                            new_y = new_y.max(block_max + EPS);
+                        } else {
+                            push_down = push_down.max((pos.y + height) - block_min);
+                            push_up = push_up.max(block_max - pos.y);
+                        }
+                    }
+                }
+            }
+            if velocity_sign == 0.0 && (push_down > 0.0 || push_up > 0.0) {
+                new_y = if push_down < push_up {
+                    pos.y - push_down - EPS
+                } else {
+                    pos.y + push_up + EPS
+                };
+            }
+            pos.y = new_y;
+        }
+        _ => {
+            let mut new_z = pos.z;
+            let mut push_near = 0.0_f32;
+            let mut push_far = 0.0_f32;
+            for bx in min_b[0]..=max_b[0] {
+                for by in min_b[1]..=max_b[1] {
+                    for bz in min_b[2]..=max_b[2] {
+                        if !world.get_block(bx, by, bz).solid() {
+                            continue;
+                        }
+                        let block_min = bz as f32;
+                        let block_max = block_min + 1.0;
+                        if max[0] <= bx as f32
+                            || min[0] >= (bx + 1) as f32
+                            || max[1] <= by as f32
+                            || min[1] >= (by + 1) as f32
+                            || max[2] <= block_min
+                            || min[2] >= block_max
+                        {
+                            continue;
+                        }
+                        hit = true;
+                        if velocity_sign > 0.0 {
+                            new_z = new_z.min(block_min - half - EPS);
+                        } else if velocity_sign < 0.0 {
+                            new_z = new_z.max(block_max + half + EPS);
+                        } else {
+                            push_near = push_near.max((pos.z + half) - block_min);
+                            push_far = push_far.max(block_max - (pos.z - half));
+                        }
+                    }
+                }
+            }
+            if velocity_sign == 0.0 && (push_near > 0.0 || push_far > 0.0) {
+                new_z = if push_near < push_far {
+                    pos.z - push_near - EPS
+                } else {
+                    pos.z + push_far + EPS
+                };
+            }
+            pos.z = new_z;
         }
     }
     hit
@@ -636,6 +849,26 @@ pub fn toggle_inventory(
     if keys.just_pressed(KeyCode::Escape) {
         player.inventory_open = false;
     }
+}
+
+pub fn update_terrain_ready(
+    mut player: ResMut<PlayerState>,
+    mut world: ResMut<VoxelWorldResource>,
+    meshes: Query<&ChunkMesh>,
+) {
+    if player.terrain_ready {
+        return;
+    }
+    let (pcx, pcz) = world.player_chunk;
+    let meshed_near = meshes
+        .iter()
+        .filter(|mesh| (mesh.chunk_x - pcx).abs() <= 1 && (mesh.chunk_z - pcz).abs() <= 1)
+        .count();
+    if meshed_near < 5 {
+        return;
+    }
+    player.terrain_ready = true;
+    ensure_player_clear(&mut world.inner, &mut player.position);
 }
 
 pub fn sync_camera(
