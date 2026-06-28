@@ -94,7 +94,11 @@ pub fn update_lights(
         transform.rotation = Quat::from_rotation_x(state.moon_angle);
     }
 
-    ambient.brightness = 140.0 + state.daylight * 520.0 + state.moonlight * 260.0;
+    let mut brightness = 140.0 + state.daylight * 520.0 + state.moonlight * 260.0;
+    if cfg!(target_arch = "wasm32") {
+        brightness = brightness.max(1200.0);
+    }
+    ambient.brightness = brightness;
     ambient.color = Color::srgb(
         0.62 + state.daylight * 0.2 + state.moonlight * 0.1,
         0.65 + state.daylight * 0.15 + state.moonlight * 0.12,

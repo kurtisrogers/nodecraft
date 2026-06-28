@@ -16,7 +16,6 @@ mod weather;
 mod world;
 mod world_gen;
 
-use bevy::pbr::{DefaultOpaqueRendererMethod, OpaqueRendererMethod};
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
@@ -50,9 +49,6 @@ pub fn run() {
     };
 
     let mut app = App::new();
-    if wasm {
-        app.insert_resource(DefaultOpaqueRendererMethod::forward());
-    }
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -187,17 +183,14 @@ fn setup_scene(
         Transform::from_rotation(Quat::from_rotation_x(std::f32::consts::PI)),
     ));
 
-    let mat = materials.add(StandardMaterial {
+  let mat = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 1.0,
         metallic: 0.0,
-        unlit: !cfg!(target_arch = "wasm32"),
+        // Unlit vertex colors match native and are reliable on mobile WebGL2.
+        unlit: true,
         fog_enabled: false,
-        opaque_render_method: if cfg!(target_arch = "wasm32") {
-            OpaqueRendererMethod::Forward
-        } else {
-            OpaqueRendererMethod::Auto
-        },
+        double_sided: cfg!(target_arch = "wasm32"),
         ..default()
     });
     commands.insert_resource(ChunkMaterial(mat));
