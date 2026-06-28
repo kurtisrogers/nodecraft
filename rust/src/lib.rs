@@ -13,6 +13,7 @@ mod structures;
 mod ui;
 mod weather;
 mod world;
+mod world_gen;
 
 use bevy::prelude::*;
 use bevy::window::PresentMode;
