@@ -129,7 +129,7 @@ pub fn mouse_look(
         delta += ev.delta;
     }
     if mobile.look_delta != Vec2::ZERO {
-        player.yaw -= mobile.look_delta.x;
+        player.yaw += mobile.look_delta.x;
         player.pitch -= mobile.look_delta.y;
     }
     if delta != Vec2::ZERO {
