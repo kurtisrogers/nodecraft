@@ -94,6 +94,11 @@ pub fn move_aabb(
         if velocity.y < 0.0 {
             velocity.y = 0.0;
         }
+        snap_feet_to_floor(world, pos, aabb);
+    }
+
+    if overlaps_solid(world, *pos, aabb) {
+        ensure_clear(world, pos, aabb);
     }
 
     MoveResult {
@@ -398,6 +403,16 @@ fn resolve_axis(
         }
     }
     hit
+}
+
+pub fn snap_feet_to_floor(world: &mut VoxelWorld, pos: &mut Vec3, aabb: Aabb) {
+    let Some(floor) = floor_height(world, pos.x, pos.z, aabb) else {
+        return;
+    };
+    let target = floor + SKIN;
+    if (pos.y - target).abs() < 0.35 {
+        pos.y = target;
+    }
 }
 
 fn floor_height(world: &mut VoxelWorld, x: f32, z: f32, aabb: Aabb) -> Option<f32> {

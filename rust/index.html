@@ -73,8 +73,9 @@
       position: absolute;
       top: 0;
       right: 0;
-      width: 65%;
-      height: 100%;
+      left: 38%;
+      bottom: 220px;
+      z-index: 10;
       pointer-events: none;
       touch-action: none;
     }
@@ -82,8 +83,11 @@
       pointer-events: auto;
     }
 
-    body.menu-open #look-zone {
-      pointer-events: none;
+    #joystick,
+    .mobile-actions,
+    #mobile-hotbar,
+    #mobile-start {
+      z-index: 50;
     }
 
     .mobile-start-btn {
@@ -100,7 +104,8 @@
       border-radius: 12px;
       pointer-events: auto;
       cursor: pointer;
-      z-index: 30;
+      z-index: 60;
+      touch-action: manipulation;
     }
 
     #joystick {
@@ -114,6 +119,7 @@
       border: 2px solid rgba(255, 255, 255, 0.25);
       pointer-events: auto;
       opacity: 0.85;
+      touch-action: none;
     }
     body.playing #joystick { opacity: 1; }
 
@@ -138,6 +144,7 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       pointer-events: auto;
+      touch-action: manipulation;
     }
 
     .mobile-btn {
@@ -174,7 +181,8 @@
       gap: 6px;
       padding: 6px;
       pointer-events: auto;
-      z-index: 25;
+      z-index: 50;
+      touch-action: manipulation;
     }
     .hotbar-slot {
       width: 40px;
@@ -198,8 +206,8 @@
     body.menu-open #joystick,
     body.menu-open .mobile-actions,
     body.menu-open #mobile-hotbar {
-      opacity: 0.2;
-      pointer-events: none;
+      opacity: 1;
+      pointer-events: auto;
     }
   </style>
   <link data-trunk rel="rust" href="Cargo.toml" />
@@ -259,6 +267,7 @@
 
       let wasmApi = null;
       let gameplayControlsReady = false;
+      let pendingStart = false;
 
       function getWasmApi() {
         return wasmApi || window.wasmBindings || null;
@@ -276,8 +285,18 @@
       }
 
       function canUseGameplayControls() {
-        return isPlaying() && !document.body.classList.contains('menu-open');
+        return isPlaying();
       }
+
+      function updateHotbarSelection(index) {
+        const hotbar = document.getElementById('mobile-hotbar');
+        if (!hotbar) return;
+        hotbar.querySelectorAll('.hotbar-slot').forEach((el) => {
+          el.classList.toggle('selected', parseInt(el.dataset.index, 10) === index);
+        });
+      }
+
+      window.ncUpdateMobileHotbar = updateHotbarSelection;
 
       function markReady() {
         document.body.classList.add('ready');
@@ -288,8 +307,12 @@
         e?.stopPropagation();
         if (isPlaying()) return;
         document.body.classList.add('playing');
+        pendingStart = true;
         callWasm('nc_set_mobile', true);
-        callWasm('nc_mobile_start');
+        if (!callWasm('nc_mobile_start')) {
+          return;
+        }
+        pendingStart = false;
       }
 
       const startBtn = document.getElementById('mobile-start');
@@ -303,8 +326,9 @@
         gameplayControlsReady = true;
         wasmApi = w;
         w.nc_set_mobile(true);
-        if (isPlaying()) {
+        if (pendingStart || isPlaying()) {
           w.nc_mobile_start();
+          pendingStart = false;
         }
 
         const joystick = document.getElementById('joystick');
@@ -508,8 +532,9 @@
         const api = getWasmApi();
         if (!api || typeof api.nc_mobile_start !== 'function') return false;
         initGameplayControls(api);
-        if (isPlaying()) {
+        if (pendingStart || isPlaying()) {
           api.nc_mobile_start();
+          pendingStart = false;
         }
         return true;
       }
