@@ -190,7 +190,9 @@ pub fn player_movement(
     move_with_collision(&mut player, &mut world.inner, dt);
 
     if player.position.y < -10.0 {
-        let spawn = world.inner.find_safe_spawn(0, 0);
+        let px = player.position.x.floor() as i32;
+        let pz = player.position.z.floor() as i32;
+        let spawn = world.inner.find_safe_spawn(px, pz);
         player.position = Vec3::new(spawn.0, spawn.1, spawn.2);
         player.velocity = Vec3::ZERO;
         player.health = 20;
@@ -251,6 +253,13 @@ fn move_with_collision(player: &mut PlayerState, world: &mut crate::world::Voxel
         player.on_ground = true;
         player.velocity.y = 0.0;
     }
+
+    for _ in 0..4 {
+        if !depenetrate_player(world, &mut player.position, half, PLAYER_HEIGHT) {
+            break;
+        }
+    }
+    nudge_eye_clear(world, &mut player.position, half);
 }
 
 fn resolve_axis(
@@ -295,21 +304,39 @@ fn resolve_axis(
                 hit = true;
                 match axis {
                     0 => {
-                        if velocity_sign <= 0.0 {
+                        let overlap_left = (pos.x + half) - block_min.x;
+                        let overlap_right = block_max.x - (pos.x - half);
+                        if velocity_sign < 0.0 {
+                            pos.x = block_min.x - half - 0.001;
+                        } else if velocity_sign > 0.0 {
+                            pos.x = block_max.x + half + 0.001;
+                        } else if overlap_left < overlap_right {
                             pos.x = block_min.x - half - 0.001;
                         } else {
                             pos.x = block_max.x + half + 0.001;
                         }
                     }
                     1 => {
+                        let overlap_below = (pos.y + height) - block_min.y;
+                        let overlap_above = block_max.y - pos.y;
                         if velocity_sign > 0.0 {
+                            pos.y = block_min.y - height - 0.001;
+                        } else if velocity_sign < 0.0 {
+                            pos.y = block_max.y + 0.001;
+                        } else if overlap_below < overlap_above {
                             pos.y = block_min.y - height - 0.001;
                         } else {
                             pos.y = block_max.y + 0.001;
                         }
                     }
                     _ => {
-                        if velocity_sign <= 0.0 {
+                        let overlap_near = (pos.z + half) - block_min.z;
+                        let overlap_far = block_max.z - (pos.z - half);
+                        if velocity_sign < 0.0 {
+                            pos.z = block_min.z - half - 0.001;
+                        } else if velocity_sign > 0.0 {
+                            pos.z = block_max.z + half + 0.001;
+                        } else if overlap_near < overlap_far {
                             pos.z = block_min.z - half - 0.001;
                         } else {
                             pos.z = block_max.z + half + 0.001;
@@ -320,6 +347,97 @@ fn resolve_axis(
         }
     }
     hit
+}
+
+fn depenetrate_player(
+    world: &mut crate::world::VoxelWorld,
+    pos: &mut Vec3,
+    half: f32,
+    height: f32,
+) -> bool {
+    let min = [pos.x - half, pos.y, pos.z - half];
+    let max = [pos.x + half, pos.y + height, pos.z + half];
+    let min_b = [
+        min[0].floor() as i32,
+        min[1].floor() as i32,
+        min[2].floor() as i32,
+    ];
+    let max_b = [
+        (max[0] - 0.001).floor() as i32,
+        (max[1] - 0.001).floor() as i32,
+        (max[2] - 0.001).floor() as i32,
+    ];
+
+    let mut best_push = Vec3::ZERO;
+    let mut best_depth = f32::INFINITY;
+
+    for bx in min_b[0]..=max_b[0] {
+        for by in min_b[1]..=max_b[1] {
+            for bz in min_b[2]..=max_b[2] {
+                if !world.get_block(bx, by, bz).solid() {
+                    continue;
+                }
+                let block_min = Vec3::new(bx as f32, by as f32, bz as f32);
+                let block_max = block_min + Vec3::ONE;
+                if max[0] <= block_min.x
+                    || min[0] >= block_max.x
+                    || max[1] <= block_min.y
+                    || min[1] >= block_max.y
+                    || max[2] <= block_min.z
+                    || min[2] >= block_max.z
+                {
+                    continue;
+                }
+
+                let push_x_neg = (pos.x + half) - block_min.x;
+                let push_x_pos = block_max.x - (pos.x - half);
+                let push_y_neg = (pos.y + height) - block_min.y;
+                let push_y_pos = block_max.y - pos.y;
+                let push_z_neg = (pos.z + half) - block_min.z;
+                let push_z_pos = block_max.z - (pos.z - half);
+
+                let candidates = [
+                    (Vec3::new(-push_x_neg, 0.0, 0.0), push_x_neg),
+                    (Vec3::new(push_x_pos, 0.0, 0.0), push_x_pos),
+                    (Vec3::new(0.0, -push_y_neg, 0.0), push_y_neg),
+                    (Vec3::new(0.0, push_y_pos, 0.0), push_y_pos),
+                    (Vec3::new(0.0, 0.0, -push_z_neg), push_z_neg),
+                    (Vec3::new(0.0, 0.0, push_z_pos), push_z_pos),
+                ];
+
+                for (push, depth) in candidates {
+                    if depth > 0.0 && depth < best_depth {
+                        best_depth = depth;
+                        best_push = push;
+                    }
+                }
+            }
+        }
+    }
+
+    if best_depth.is_finite() {
+        *pos += best_push + best_push.signum() * Vec3::splat(0.001);
+        return true;
+    }
+    false
+}
+
+fn nudge_eye_clear(world: &mut crate::world::VoxelWorld, pos: &mut Vec3, half: f32) {
+    let eye_y = pos.y + EYE_HEIGHT;
+    let ex = pos.x;
+    let ez = pos.z;
+    for _ in 0..6 {
+        let bx = ex.floor() as i32;
+        let by = eye_y.floor() as i32;
+        let bz = ez.floor() as i32;
+        if !world.get_block(bx, by, bz).solid() {
+            break;
+        }
+        pos.y += 0.25;
+        if world.is_volume_clear(pos.x, pos.y, pos.z, half, PLAYER_HEIGHT) {
+            break;
+        }
+    }
 }
 
 pub struct RayHit {
