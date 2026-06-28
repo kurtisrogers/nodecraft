@@ -7,8 +7,10 @@ use crate::config::{
 use crate::inventory::GameInventory;
 use crate::meshing::{ChunkMesh, RemeshQueue, VoxelWorldResource};
 use crate::mobile::{is_controlling, MobileInput};
+use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
+use bevy::render::camera::Exposure;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy_pbr::{DistanceFog, FogFalloff};
 
@@ -68,6 +70,10 @@ pub fn spawn_player(
 
     commands.spawn((
         Camera3d::default(),
+        Tonemapping::None,
+        Exposure {
+            ev100: Exposure::EV100_INDOOR,
+        },
         Projection::Perspective(PerspectiveProjection {
             far: 512.0,
             near: 0.05,

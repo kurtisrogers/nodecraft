@@ -200,8 +200,8 @@ fn push_face(
 ) {
     let base = positions.len() as u32;
     let color = block.color(face);
-    let rgba = color.to_srgba();
-    let rgba = [rgba.red, rgba.green, rgba.blue, rgba.alpha];
+    let linear = color.to_linear();
+    let rgba = [linear.red, linear.green, linear.blue, linear.alpha];
     let normal = [dir[0] as f32, dir[1] as f32, dir[2] as f32];
 
     let verts: [[f32; 3]; 4] = match (dir[0], dir[1], dir[2]) {
@@ -265,8 +265,8 @@ fn push_cross_decoration(
     let fy = y as f32;
     let fz = z as f32;
     let color = block.color(Face::Side);
-    let rgba = color.to_srgba();
-    let rgba = [rgba.red, rgba.green, rgba.blue, rgba.alpha];
+    let linear = color.to_linear();
+    let rgba = [linear.red, linear.green, linear.blue, linear.alpha];
 
     let quads: [([[f32; 3]; 4], [f32; 3]); 2] = [
         (
