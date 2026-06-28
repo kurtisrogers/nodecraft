@@ -246,7 +246,7 @@ pub fn sync_chunk_meshes(
     mut queue: ResMut<RemeshQueue>,
     mut entity_map: ResMut<ChunkEntityMap>,
 ) {
-    let mut budget = if cfg!(target_arch = "wasm32") { 6 } else { 4 };
+    let mut budget = if cfg!(target_arch = "wasm32") { 8 } else { 6 };
     let player_chunk = world.player_chunk;
     let loaded: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
 
@@ -260,12 +260,10 @@ pub fn sync_chunk_meshes(
     });
     queue.retain_loaded(&loaded);
 
-    if queue.keys.is_empty() {
-        for &(cx, cz) in &world.loaded_chunks {
-            if let Some(chunk) = world.inner.chunks.get(&(cx, cz)) {
-                if chunk.dirty {
-                    queue.push((cx, cz));
-                }
+    for &(cx, cz) in &world.loaded_chunks {
+        if let Some(chunk) = world.inner.chunks.get(&(cx, cz)) {
+            if chunk.dirty {
+                queue.push((cx, cz));
             }
         }
     }
@@ -274,16 +272,16 @@ pub fn sync_chunk_meshes(
         let Some((cx, cz)) = queue.pop_nearest(player_chunk) else { break };
         budget -= 1;
 
-        if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
-            chunk.dirty = false;
-        }
-
         let Some(mesh) = build_chunk_mesh(&world.inner, cx, cz) else {
             if let Some(entity) = entity_map.entities.remove(&(cx, cz)) {
                 commands.entity(entity).despawn();
             }
             continue;
         };
+
+        if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
+            chunk.dirty = false;
+        }
 
         let handle = meshes.add(mesh);
         if let Some(&entity) = entity_map.entities.get(&(cx, cz)) {
@@ -338,9 +336,20 @@ pub fn update_world_chunks(
         let previous: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
         world.loaded_chunks = world.inner.load_chunks_around(px, pz);
         world.inner.unload_distant_chunks(px, pz);
-        for &(cx, cz) in &world.loaded_chunks {
-            if !previous.contains(&(cx, cz)) {
-                queue.push((cx, cz));
+        let new_chunks: Vec<_> = world
+            .loaded_chunks
+            .iter()
+            .copied()
+            .filter(|key| !previous.contains(key))
+            .collect();
+        for (cx, cz) in new_chunks {
+            queue.push((cx, cz));
+            for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)] {
+                let neighbor = (cx + dx, cz + dz);
+                if let Some(chunk) = world.inner.chunks.get_mut(&neighbor) {
+                    chunk.dirty = true;
+                    queue.push(neighbor);
+                }
             }
         }
     }

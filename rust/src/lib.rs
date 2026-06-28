@@ -8,6 +8,7 @@ mod mobile;
 mod mobs;
 mod noise;
 mod player;
+mod sky;
 mod structures;
 mod ui;
 mod weather;
@@ -16,7 +17,7 @@ mod world;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
-use config::DEFAULT_SEED;
+use config::{DEFAULT_SEED, WASM_RENDER_DISTANCE};
 use meshing::{sync_chunk_meshes, update_world_chunks, ChunkEntityMap, ChunkMaterial, RemeshQueue, VoxelWorldResource};
 use mobile::{
     clear_mobile_frame, init_mobile, notify_mobile_ui_ready, sync_mobile_hotbar_ui, sync_mobile_input,
@@ -31,6 +32,7 @@ use player::{
 use ui::{draw_hud, setup_fog, update_fps, HudState};
 use weather::{update_day_night, update_lights};
 use inventory::GameInventory;
+use sky::{setup_sky, update_sky};
 
 pub fn run() {
     let wasm = cfg!(target_arch = "wasm32");
@@ -78,7 +80,7 @@ pub fn run() {
     .insert_resource(MobileInput::default())
     .insert_resource(weather::DayNight::default())
     .insert_resource(mobs::MobManager::default())
-    .add_systems(Startup, (setup_scene, setup_fog, spawn_player, init_world, init_mobile))
+    .add_systems(Startup, (setup_scene, setup_sky, setup_fog, spawn_player, init_world, init_mobile))
     .add_systems(
         Update,
         (
@@ -110,6 +112,7 @@ pub fn run() {
             update_terrain_ready,
             update_day_night,
             update_lights,
+            update_sky,
             update_fps,
             draw_hud,
         ),
@@ -151,7 +154,7 @@ fn init_world(
     player: Res<PlayerState>,
 ) {
     if cfg!(target_arch = "wasm32") {
-        world.inner.render_distance = 6;
+        world.inner.render_distance = WASM_RENDER_DISTANCE;
     }
     let px = player.position.x.floor() as i32;
     let pz = player.position.z.floor() as i32;
