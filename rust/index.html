@@ -396,6 +396,62 @@
     body.playing:not(.menu-pause):not(.menu-inventory) #crosshair {
       opacity: 1;
     }
+    #nav-hud {
+      position: fixed;
+      top: max(10px, env(safe-area-inset-top));
+      right: max(10px, env(safe-area-inset-right));
+      z-index: 16;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    body.playing:not(.menu-pause):not(.menu-inventory) #nav-hud {
+      opacity: 1;
+    }
+    #nav-compass {
+      position: relative;
+      width: 120px;
+      height: 48px;
+      border-radius: 8px;
+      background: rgba(8, 12, 20, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      overflow: hidden;
+    }
+    #nav-compass canvas {
+      display: block;
+      width: 120px;
+      height: 48px;
+    }
+    #nav-compass-label {
+      position: absolute;
+      left: 6px;
+      bottom: 4px;
+      font-size: 10px;
+      color: rgba(235, 235, 245, 0.92);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      max-width: 108px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #minimap-canvas {
+      width: 120px;
+      height: 120px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(8, 12, 20, 0.72);
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #minimap-north {
+      font-size: 10px;
+      color: rgba(200, 200, 210, 0.85);
+      letter-spacing: 0.08em;
+    }
   </style>
   <link data-trunk rel="rust" href="Cargo.toml" data-wasm-opt="z" />
 </head>
@@ -411,6 +467,15 @@
   </div>
   <canvas id="canvas"></canvas>
   <div id="crosshair" aria-hidden="true"></div>
+
+  <div id="nav-hud" aria-hidden="true">
+    <div id="nav-compass">
+      <canvas id="nav-compass-canvas" width="120" height="48"></canvas>
+      <div id="nav-compass-label">Scanning…</div>
+    </div>
+    <canvas id="minimap-canvas" width="56" height="56"></canvas>
+    <div id="minimap-north">N</div>
+  </div>
 
   <div id="pause-overlay" hidden>
     <div class="game-panel" role="dialog" aria-label="Pause menu">
@@ -624,6 +689,71 @@
           return { item: parseInt(item, 10) || 0, count: parseInt(count, 10) || 0 };
         });
       }
+
+      window.ncUpdateNavHud = function(
+        playerYaw,
+        villageDist,
+        villageBearing,
+        villageActive,
+        volcanoDist,
+        volcanoBearing,
+        volcanoActive,
+        rgba
+      ) {
+        const minimap = document.getElementById('minimap-canvas');
+        if (minimap) {
+          const ctx = minimap.getContext('2d');
+          if (ctx && rgba && rgba.length >= 56 * 56 * 4) {
+            const image = ctx.createImageData(56, 56);
+            image.data.set(rgba);
+            ctx.putImageData(image, 0, 0);
+          }
+        }
+
+        const compass = document.getElementById('nav-compass-canvas');
+        const label = document.getElementById('nav-compass-label');
+        if (!compass) return;
+        const c = compass.getContext('2d');
+        if (!c) return;
+        c.clearRect(0, 0, compass.width, compass.height);
+        const cx = compass.width * 0.5;
+        const cy = compass.height * 0.5;
+        const radius = 18;
+        c.strokeStyle = 'rgba(220, 220, 230, 0.75)';
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.arc(cx, cy, radius, 0, Math.PI * 2);
+        c.stroke();
+        c.fillStyle = 'rgba(240, 240, 250, 0.95)';
+        c.beginPath();
+        c.arc(cx, cy, 2.2, 0, Math.PI * 2);
+        c.fill();
+
+        if (villageActive) {
+          const x = Math.sin(villageBearing) * radius * 0.82;
+          const y = -Math.cos(villageBearing) * radius * 0.82;
+          c.strokeStyle = 'rgba(255, 210, 80, 0.95)';
+          c.lineWidth = 2.5;
+          c.beginPath();
+          c.moveTo(cx + x * 0.2, cy + y * 0.2);
+          c.lineTo(cx + x, cy + y);
+          c.stroke();
+          if (label) {
+            label.textContent = 'Village ' + Math.round(villageDist) + 'm';
+          }
+        } else if (label) {
+          label.textContent = 'No village in range';
+        }
+
+        if (volcanoActive) {
+          const x = Math.sin(volcanoBearing) * radius * 0.62;
+          const y = -Math.cos(volcanoBearing) * radius * 0.62;
+          c.fillStyle = 'rgba(255, 100, 70, 0.95)';
+          c.beginPath();
+          c.arc(cx + x, cy + y, 3.5, 0, Math.PI * 2);
+          c.fill();
+        }
+      };
 
       window.ncUpdateGameUi = function(screen, hotbarIndex, pickedSlot, slotsCsv) {
         ensureInventoryGrid();
