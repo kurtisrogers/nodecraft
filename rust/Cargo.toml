@@ -32,6 +32,8 @@ bevy = { version = "0.15", default-features = false, features = [
   "bevy_pbr",
   "bevy_window",
   "webgl2",
+  "x11",
+  "wayland",
   "default_font",
 ] }
 bevy_egui = "0.31"

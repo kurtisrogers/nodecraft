@@ -151,7 +151,8 @@ pub fn run() {
         app.add_systems(Update, draw_hud);
     }
 
-    if wasm {
+    #[cfg(target_arch = "wasm32")]
+    {
         app.add_systems(Update, dismiss_loading_screen_once);
     }
 
