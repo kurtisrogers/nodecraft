@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::render::view::Msaa;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
-use bevy_pbr::{DistanceFog, FogFalloff};
+use bevy::pbr::{DistanceFog, FogFalloff};
 
 const PLAYER_AABB: Aabb = Aabb {
     half_x: PLAYER_WIDTH * 0.5,

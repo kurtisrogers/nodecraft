@@ -1,6 +1,6 @@
 use crate::config::DAY_LENGTH_SECS;
 use bevy::prelude::*;
-use bevy_pbr::DistanceFog;
+use bevy::pbr::DistanceFog;
 
 #[derive(Resource)]
 pub struct DayNight {

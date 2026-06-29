@@ -480,7 +480,8 @@ pub fn bootstrap_player_meshes(
             }
         }
     }
-    if cfg!(target_arch = "wasm32") && !entity_map.entities.is_empty() {
+    #[cfg(target_arch = "wasm32")]
+    if !entity_map.entities.is_empty() {
         crate::wasm_entry::set_chunk_mesh_count(entity_map.entities.len());
         crate::wasm_entry::hide_loading_overlay_if_ready(entity_map.entities.len());
     }

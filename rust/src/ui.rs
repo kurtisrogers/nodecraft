@@ -4,6 +4,7 @@ use crate::mobs::MobManager;
 use crate::mobile::MobileInput;
 use crate::player::PlayerState;
 use bevy::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy_egui::{egui, EguiContexts};
 
 #[derive(Resource, Default)]
@@ -23,6 +24,7 @@ pub fn update_fps(time: Res<Time>, mut hud: ResMut<HudState>) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn draw_hud(
     mut contexts: EguiContexts,
     hud: Res<HudState>,
