@@ -32,7 +32,7 @@ pub fn decorate_chunk_vegetation(world: &mut VoxelWorld, chunk_x: i32, chunk_z: 
             let biome = world.noise.biome(wx, wz);
             let is_desert = biome.temperature > 0.3 && biome.moisture < -0.1;
             let is_snow = biome.temperature < -0.3;
-            if is_desert || is_snow || world.noise.is_in_settlement(wx, wz) {
+            if is_desert || is_snow || world.noise.is_in_settlement(wx, wz) || world.noise.is_in_volcano(wx, wz) {
                 continue;
             }
 

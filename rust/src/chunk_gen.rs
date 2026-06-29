@@ -2,6 +2,7 @@ use crate::blocks::BlockId;
 use crate::config::{CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT};
 use crate::noise::NoiseGenerator;
 use crate::structures::place_settlement;
+use crate::structures::place_volcano;
 use crate::world::VoxelWorld;
 
 pub fn ensure_settlements_near(world: &mut VoxelWorld, world_x: i32, world_z: i32, radius: i32) {
@@ -58,16 +59,99 @@ pub fn ensure_settlements_near(world: &mut VoxelWorld, world_x: i32, world_z: i3
     }
 }
 
-fn mark_settlement_dirty(world: &mut VoxelWorld, center_x: i32, center_z: i32) {
+pub fn ensure_volcanoes_near(world: &mut VoxelWorld, world_x: i32, world_z: i32, radius: i32) {
+    const GRID: i32 = 384;
+    let min_cell_x = (world_x - radius).div_euclid(GRID);
+    let max_cell_x = (world_x + radius).div_euclid(GRID);
+    let min_cell_z = (world_z - radius).div_euclid(GRID);
+    let max_cell_z = (world_z + radius).div_euclid(GRID);
+
+    let mut pending: Vec<(i32, i32, i32, i32)> = Vec::new();
+    for cell_x in min_cell_x..=max_cell_x {
+        for cell_z in min_cell_z..=max_cell_z {
+            let key = (cell_x, cell_z);
+            if world.placed_volcanoes.contains(&key) {
+                continue;
+            }
+            if world.noise.volcano_cell_score(cell_x, cell_z) < 0.24 {
+                continue;
+            }
+            let center_x = cell_x * GRID + GRID / 2;
+            let center_z = cell_z * GRID + GRID / 2;
+            let dist = (((center_x - world_x).pow(2) + (center_z - world_z).pow(2)) as f32).sqrt();
+            if dist > radius as f32 {
+                continue;
+            }
+            if !world.noise.is_land(center_x, center_z) {
+                continue;
+            }
+            if world.noise.settlement_at(center_x, center_z) > 0.2 {
+                continue;
+            }
+            let peaks = world.noise.peaks_layer(center_x, center_z);
+            if peaks < 0.08 {
+                continue;
+            }
+            pending.push((center_x, center_z, cell_x, cell_z));
+        }
+    }
+
+    for (center_x, center_z, cell_x, cell_z) in pending {
+        world.load_chunks_around(center_x, world_z);
+        world.load_chunks_around(world_x, center_z);
+        world.load_chunks_around(center_x, center_z);
+        place_volcano(world, center_x, center_z);
+        world.placed_volcanoes.insert((cell_x, cell_z));
+        mark_feature_dirty(world, center_x, center_z, 3);
+    }
+}
+
+fn mark_feature_dirty(world: &mut VoxelWorld, center_x: i32, center_z: i32, chunk_ring: i32) {
     let center_chunk_x = center_x.div_euclid(CHUNK_SIZE);
     let center_chunk_z = center_z.div_euclid(CHUNK_SIZE);
-    for dx in -2i32..=2 {
-        for dz in -2i32..=2 {
+    for dx in -chunk_ring..=chunk_ring {
+        for dz in -chunk_ring..=chunk_ring {
             if let Some(chunk) = world.chunks.get_mut(&(center_chunk_x + dx, center_chunk_z + dz)) {
                 chunk.dirty = true;
             }
         }
     }
+}
+
+fn mark_settlement_dirty(world: &mut VoxelWorld, center_x: i32, center_z: i32) {
+    mark_feature_dirty(world, center_x, center_z, 2);
+}
+
+pub fn try_place_underground_lava(
+    blocks: &mut [BlockId],
+    x: i32,
+    y: i32,
+    z: i32,
+    world_x: i32,
+    world_z: i32,
+    noise: &NoiseGenerator,
+    surface_y: i32,
+) {
+    if y < 6 || y > 18 {
+        return;
+    }
+    if get_block_local(blocks, x, y, z) != BlockId::Air {
+        return;
+    }
+    if get_block_local(blocks, x, y - 1, z) != BlockId::Stone {
+        return;
+    }
+    if count_cave_openness(blocks, x, y, z) < 8 {
+        return;
+    }
+    if !noise.is_deep_cavern(world_x, y, world_z, surface_y) {
+        return;
+    }
+    let lava_roll = noise.roll(world_x + y * 3, world_z + y * 5, 29);
+    if lava_roll > 0.07 {
+        return;
+    }
+    set_block_local(blocks, x, y, z, BlockId::Lava);
 }
 
 pub fn generate_chunk(chunk_x: i32, chunk_z: i32, noise: &NoiseGenerator) -> ChunkData {
@@ -193,7 +277,7 @@ fn place_surface_decorations(
     let is_desert = biome.temperature > 0.3 && biome.moisture < -0.1;
     let is_snow = biome.temperature < -0.3;
 
-    if !is_desert && !is_snow && !noise.is_in_settlement(world_x, world_z) {
+    if !is_desert && !is_snow && !noise.is_in_settlement(world_x, world_z) && !noise.is_in_volcano(world_x, world_z) {
         // Trees and bushes are placed in world_gen::decorate_chunk_vegetation.
     }
 
@@ -286,23 +370,7 @@ fn carve_underground(
         if y >= carve_top {
             break;
         }
-        if get_block_local(blocks, x, y, z) != BlockId::Air {
-            continue;
-        }
-        if get_block_local(blocks, x, y - 1, z) != BlockId::Stone {
-            continue;
-        }
-        if count_cave_openness(blocks, x, y, z) < 8 {
-            continue;
-        }
-        if !noise.is_deep_cavern(world_x, y, world_z, surface_y) {
-            continue;
-        }
-        let lava_roll = noise.roll(world_x + y * 3, world_z + y * 5, 29);
-        if lava_roll > 0.04 {
-            continue;
-        }
-        set_block_local(blocks, x, y, z, BlockId::Lava);
+        try_place_underground_lava(blocks, x, y, z, world_x, world_z, noise, surface_y);
     }
 }
 

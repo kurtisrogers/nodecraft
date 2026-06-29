@@ -140,10 +140,7 @@ pub fn run() {
     );
     app.add_systems(Update, update_clouds);
     app.add_systems(Update, update_sky.after(update_lights));
-    #[cfg(not(target_arch = "wasm32"))]
-    if !wasm {
-        app.add_systems(Update, (mob_spawner, mob_ai));
-    }
+    app.add_systems(Update, (mob_spawner, mob_ai));
     if !wasm {
         #[cfg(not(target_arch = "wasm32"))]
         app.add_systems(Update, draw_hud);
@@ -263,6 +260,7 @@ fn init_world(
     world.inner.retain_chunks(&loaded_set);
     if cfg!(not(target_arch = "wasm32")) {
         crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
+        crate::chunk_gen::ensure_volcanoes_near(&mut world.inner, px, pz, 320);
     }
     for &(cx, cz) in &world.loaded_chunks.clone() {
         queue.push((cx, cz));

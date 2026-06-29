@@ -151,7 +151,7 @@ impl NoiseGenerator {
     }
 
     /// Gentle peaks — only positive ridges, keeps topology readable.
-    fn peaks_layer(&self, world_x: i32, world_z: i32) -> f32 {
+    pub(crate) fn peaks_layer(&self, world_x: i32, world_z: i32) -> f32 {
         let wx = world_x as f32;
         let wz = world_z as f32;
         let n = self.fbm(wx * 0.003 + 60.0, wz * 0.003 + 60.0, 3, 0.5, 2.0);
@@ -159,6 +159,38 @@ impl NoiseGenerator {
     }
 
     pub fn terrain_height(&self, world_x: i32, world_z: i32) -> i32 {
+        let mut height = self.base_land_height(world_x, world_z) as f32;
+
+        let settle = self.settlement_at(world_x, world_z);
+        if settle > 0.15 {
+            let village_base = SEA_LEVEL as f32 + 8.0;
+            height = height * (1.0 - settle * 0.92) + village_base * (settle * 0.92);
+        }
+
+        let volcano = self.volcano_at(world_x, world_z);
+        if volcano > 0.08 {
+            if let Some((center_x, center_z)) = self.volcano_center_for(world_x, world_z) {
+                let dx = (world_x - center_x) as f32;
+                let dz = (world_z - center_z) as f32;
+                let dist = (dx * dx + dz * dz).sqrt();
+                const RADIUS: f32 = 30.0;
+                if dist < RADIUS {
+                    let cone = (1.0 - dist / RADIUS).powf(1.35);
+                    height += cone * volcano * 34.0;
+                }
+            }
+        }
+
+        let max_h = if volcano > 0.25 {
+            SEA_LEVEL as f32 + 52.0
+        } else {
+            SEA_LEVEL as f32 + 22.0
+        };
+        height.clamp(SEA_LEVEL as f32 + 2.0, max_h).floor() as i32
+    }
+
+    /// Land height before villages and volcanoes reshape the surface.
+    pub fn base_land_height(&self, world_x: i32, world_z: i32) -> i32 {
         let wx = world_x as f32;
         let wz = world_z as f32;
         let cont = self.continentalness(world_x, world_z);
@@ -177,16 +209,9 @@ impl NoiseGenerator {
         let land_strength = ((cont + 0.12) / 0.5).clamp(0.0, 1.0);
         let erosion = self.erosion_layer(world_x, world_z);
         let peaks = self.peaks_layer(world_x, world_z);
-        let mut height =
-            SEA_LEVEL as f32 + 5.0 + land_strength * 6.0 + erosion * 5.5 + peaks * 4.0;
-
-        let settle = self.settlement_at(world_x, world_z);
-        if settle > 0.15 {
-            let village_base = SEA_LEVEL as f32 + 8.0;
-            height = height * (1.0 - settle * 0.92) + village_base * (settle * 0.92);
-        }
-
-        height.clamp(SEA_LEVEL as f32 + 2.0, SEA_LEVEL as f32 + 22.0).floor() as i32
+        (SEA_LEVEL as f32 + 5.0 + land_strength * 6.0 + erosion * 5.5 + peaks * 4.0)
+            .clamp(SEA_LEVEL as f32 + 2.0, SEA_LEVEL as f32 + 22.0)
+            .floor() as i32
     }
 
     /// How flat the terrain is in a 2-block radius — used to avoid trees on cliffs.
@@ -261,6 +286,76 @@ impl NoiseGenerator {
         self.settlement_at(world_x, world_z) > 0.4
     }
 
+    pub(crate) fn volcano_cell_score(&self, cell_x: i32, cell_z: i32) -> f32 {
+        self.fbm(cell_x as f32 * 0.72 + 710.0, cell_z as f32 * 0.72 + 710.0, 2, 0.5, 2.0)
+    }
+
+    pub fn volcano_at(&self, world_x: i32, world_z: i32) -> f32 {
+        const GRID: i32 = 384;
+        let cell_x = world_x.div_euclid(GRID);
+        let cell_z = world_z.div_euclid(GRID);
+        let cell = self.volcano_cell_score(cell_x, cell_z);
+        if cell < 0.24 {
+            return 0.0;
+        }
+        if !self.is_land(world_x, world_z) {
+            return 0.0;
+        }
+        let peaks = self.peaks_layer(world_x, world_z);
+        if peaks < 0.08 {
+            return 0.0;
+        }
+        let lx = world_x.rem_euclid(GRID);
+        let lz = world_z.rem_euclid(GRID);
+        let dx = lx.min(GRID - lx) as f32 / (GRID as f32 * 0.44);
+        let dz = lz.min(GRID - lz) as f32 / (GRID as f32 * 0.44);
+        let edge = dx.min(dz);
+        (edge * ((cell - 0.24) / 0.30) * (0.65 + peaks * 0.7)).clamp(0.0, 1.0)
+    }
+
+    pub fn volcano_center_for(&self, world_x: i32, world_z: i32) -> Option<(i32, i32)> {
+        const GRID: i32 = 384;
+        let cell_x = world_x.div_euclid(GRID);
+        let cell_z = world_z.div_euclid(GRID);
+        if self.volcano_cell_score(cell_x, cell_z) < 0.24 {
+            return None;
+        }
+        Some((cell_x * GRID + GRID / 2, cell_z * GRID + GRID / 2))
+    }
+
+    pub fn is_in_volcano(&self, world_x: i32, world_z: i32) -> bool {
+        self.volcano_at(world_x, world_z) > 0.32
+    }
+
+    pub fn volcano_center_near(&self, world_x: i32, world_z: i32, search_radius: i32) -> Option<(i32, i32)> {
+        const GRID: i32 = 384;
+        let cx0 = world_x.div_euclid(GRID);
+        let cz0 = world_z.div_euclid(GRID);
+        let mut best: Option<(i32, i32, f32)> = None;
+
+        for dcx in -1..=1 {
+            for dcz in -1..=1 {
+                let cell_x = cx0 + dcx;
+                let cell_z = cz0 + dcz;
+                if self.volcano_cell_score(cell_x, cell_z) < 0.24 {
+                    continue;
+                }
+                let center_x = cell_x * GRID + GRID / 2;
+                let center_z = cell_z * GRID + GRID / 2;
+                if !self.is_land(center_x, center_z) {
+                    continue;
+                }
+                let dist = (((center_x - world_x).pow(2) + (center_z - world_z).pow(2)) as f32).sqrt();
+                if dist <= search_radius as f32 {
+                    if best.map(|b| dist < b.2).unwrap_or(true) {
+                        best = Some((center_x, center_z, dist));
+                    }
+                }
+            }
+        }
+        best.map(|(x, z, _)| (x, z))
+    }
+
     pub fn roll(&self, world_x: i32, world_z: i32, salt: i32) -> f32 {
         let h = (world_x as u32)
             .wrapping_mul(374761393)
@@ -287,7 +382,10 @@ impl NoiseGenerator {
     }
 
     pub fn should_place_tree(&self, world_x: i32, world_z: i32) -> bool {
-        if !self.is_land(world_x, world_z) || self.is_in_settlement(world_x, world_z) {
+        if !self.is_land(world_x, world_z)
+            || self.is_in_settlement(world_x, world_z)
+            || self.is_in_volcano(world_x, world_z)
+        {
             return false;
         }
         if self.local_flatness(world_x, world_z) < 0.55 {

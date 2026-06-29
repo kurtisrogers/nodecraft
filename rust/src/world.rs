@@ -10,6 +10,7 @@ pub struct VoxelWorld {
     pub chunks: HashMap<(i32, i32), ChunkData>,
     pub modifications: HashMap<(i32, i32, i32), BlockId>,
     pub placed_settlements: std::collections::HashSet<(i32, i32)>,
+    pub placed_volcanoes: std::collections::HashSet<(i32, i32)>,
     pub render_distance: i32,
 }
 
@@ -21,6 +22,7 @@ impl VoxelWorld {
             chunks: HashMap::new(),
             modifications: HashMap::new(),
             placed_settlements: std::collections::HashSet::new(),
+            placed_volcanoes: std::collections::HashSet::new(),
             render_distance: RENDER_DISTANCE,
         }
     }
@@ -222,6 +224,9 @@ impl VoxelWorld {
                     continue;
                 }
                 if self.get_block(x, surface_y, z) == BlockId::Lava {
+                    continue;
+                }
+                if self.noise.is_in_volcano(x, z) {
                     continue;
                 }
                 let openness = self.count_open_space(x, z, surface_y);
