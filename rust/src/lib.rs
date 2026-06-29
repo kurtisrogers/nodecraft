@@ -10,6 +10,7 @@ mod inventory;
 mod meshing;
 mod mobile;
 mod mobs;
+mod nav;
 mod noise;
 mod player;
 mod clouds;
@@ -36,6 +37,9 @@ use mobile::{
     sync_mobile_menu_class, MobileInput,
 };
 use mobs::{mob_attack_interaction, mob_ai, mob_spawner};
+use nav::{update_nav_hud, NavHud};
+#[cfg(not(target_arch = "wasm32"))]
+use nav::draw_nav_hud;
 use menu::{
     handle_menu_input, process_restart, release_cursor_when_menu_open, sync_html_ui, GameUiState,
 };
@@ -106,6 +110,7 @@ pub fn run() {
     .insert_resource(GameUiState::default())
     .insert_resource(weather::DayNight::default())
     .insert_resource(mobs::MobManager::default())
+    .insert_resource(NavHud::default())
     .add_systems(Startup, (
         setup_scene,
         setup_fog,
@@ -151,6 +156,7 @@ pub fn run() {
             update_day_night,
             update_lights,
             update_fps,
+            update_nav_hud,
         ),
     );
     app.add_systems(Update, update_clouds);
@@ -158,7 +164,7 @@ pub fn run() {
     app.add_systems(Update, (mob_spawner, mob_ai));
     if !wasm {
         #[cfg(not(target_arch = "wasm32"))]
-        app.add_systems(Update, draw_hud);
+        app.add_systems(Update, (draw_hud, draw_nav_hud));
     }
 
     #[cfg(target_arch = "wasm32")]
