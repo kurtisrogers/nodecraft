@@ -264,8 +264,9 @@ pub fn mob_attack_interaction(
     mut mobs: Query<(Entity, &mut MobEntity, &Transform)>,
     mut commands: Commands,
     mobile: Res<MobileInput>,
+    ui: Res<crate::menu::GameUiState>,
 ) {
-    if !is_controlling(&player, &mobile) || player.attack_cooldown > 0.0 {
+    if !is_controlling(&player, &mobile, &ui) || player.attack_cooldown > 0.0 {
         return;
     }
     if !mouse.just_pressed(MouseButton::Left) && !mobile.break_pressed {

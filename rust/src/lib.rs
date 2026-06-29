@@ -3,6 +3,7 @@ mod blocks;
 mod chunk_gen;
 mod collision;
 mod config;
+mod menu;
 mod inventory;
 mod meshing;
 mod mobile;
@@ -32,9 +33,12 @@ use mobile::{
     sync_mobile_menu_class, MobileInput,
 };
 use mobs::{mob_attack_interaction, mob_ai, mob_spawner};
+use menu::{
+    handle_menu_input, process_restart, release_cursor_when_menu_open, sync_html_ui, GameUiState,
+};
 use player::{
-    block_interaction, hotbar_keys, lock_cursor, mobile_hotbar_cycle, mobile_session_start,
-    mouse_look, player_movement, spawn_player, sync_camera, toggle_inventory, update_terrain_ready,
+    block_interaction, hotbar_keys, lock_cursor, mobile_session_start,
+    mouse_look, player_movement, spawn_player, sync_camera, update_terrain_ready,
     PlayerState,
 };
 use ui::{setup_fog, update_fps, HudState};
@@ -94,6 +98,7 @@ pub fn run() {
     .insert_resource(ChunkEntityMap::default())
     .insert_resource(HudState::default())
     .insert_resource(MobileInput::default())
+    .insert_resource(GameUiState::default())
     .insert_resource(weather::DayNight::default())
     .insert_resource(mobs::MobManager::default())
     .add_systems(Startup, (
@@ -117,13 +122,15 @@ pub fn run() {
             mob_attack_interaction,
             block_interaction,
             hotbar_keys,
-            mobile_hotbar_cycle,
-            toggle_inventory,
+            handle_menu_input,
+            release_cursor_when_menu_open,
             clear_mobile_frame,
             sync_mobile_menu_class,
             sync_mobile_hotbar_ui,
             mobile_session_start,
             notify_mobile_ui_ready,
+            sync_html_ui,
+            process_restart,
         )
             .chain(),
     )

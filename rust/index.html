@@ -264,6 +264,102 @@
       opacity: 1;
       pointer-events: auto;
     }
+
+    body.menu-pause #joystick,
+    body.menu-pause .mobile-actions,
+    body.menu-pause #look-zone,
+    body.menu-inventory #joystick,
+    body.menu-inventory .mobile-actions,
+    body.menu-inventory #look-zone {
+      pointer-events: none;
+      opacity: 0.35;
+    }
+
+    #pause-overlay,
+    #inventory-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.55);
+      pointer-events: auto;
+    }
+    body.menu-pause #pause-overlay,
+    body.menu-inventory #inventory-overlay {
+      display: flex;
+    }
+
+    .game-panel {
+      background: rgba(18, 22, 28, 0.94);
+      border: 2px solid rgba(255, 255, 255, 0.18);
+      border-radius: 14px;
+      padding: 20px 24px;
+      color: #f2f4f8;
+      min-width: 260px;
+      max-width: min(92vw, 520px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    .game-panel h2 {
+      margin: 0 0 12px;
+      font-size: 1.35rem;
+      font-weight: 600;
+    }
+    .panel-btn {
+      display: block;
+      width: 100%;
+      margin: 8px 0 0;
+      padding: 12px 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #e8f5e9;
+      background: rgba(45, 106, 79, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .panel-btn.secondary {
+      background: rgba(60, 70, 84, 0.92);
+    }
+    .panel-btn.danger {
+      background: rgba(140, 48, 48, 0.92);
+    }
+
+    #inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 6px;
+      margin: 12px 0;
+    }
+    .inv-slot {
+      min-height: 44px;
+      padding: 4px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.35);
+      color: #fff;
+      font-size: 11px;
+      line-height: 1.2;
+      text-align: center;
+      touch-action: manipulation;
+      user-select: none;
+    }
+    .inv-slot.hotbar-row {
+      border-color: rgba(255, 215, 0, 0.45);
+    }
+    .inv-slot.selected-hotbar {
+      box-shadow: 0 0 0 2px #ffd700;
+    }
+    .inv-slot.picked {
+      border-color: #7ec8ff;
+      box-shadow: 0 0 0 2px #7ec8ff;
+    }
+    .inv-slot .slot-key {
+      opacity: 0.65;
+      font-size: 10px;
+    }
   </style>
   <link data-trunk rel="rust" href="Cargo.toml" data-wasm-opt="z" />
 </head>
@@ -279,6 +375,25 @@
   </div>
   <canvas id="canvas"></canvas>
 
+  <div id="pause-overlay" hidden>
+    <div class="game-panel" role="dialog" aria-label="Pause menu">
+      <h2>Paused</h2>
+      <p style="margin:0 0 8px; opacity:0.85">Take a breather.</p>
+      <button id="btn-resume" class="panel-btn" type="button">Resume</button>
+      <button id="btn-open-inventory" class="panel-btn secondary" type="button">Inventory</button>
+      <button id="btn-restart" class="panel-btn danger" type="button">Restart</button>
+    </div>
+  </div>
+
+  <div id="inventory-overlay" hidden>
+    <div class="game-panel" role="dialog" aria-label="Inventory">
+      <h2>Inventory</h2>
+      <p style="margin:0 0 4px; opacity:0.85; font-size:0.9rem">Tap slots to swap. Hotbar row equips on tap.</p>
+      <div id="inventory-grid"></div>
+      <button id="btn-close-inventory" class="panel-btn secondary" type="button">Close</button>
+    </div>
+  </div>
+
   <div id="mobile-controls">
     <button id="mobile-start" class="mobile-start-btn" type="button">Tap to Play</button>
     <div id="look-zone" aria-label="Look around"></div>
@@ -290,6 +405,7 @@
       <button id="btn-sprint" class="mobile-btn mobile-btn-small" type="button" aria-label="Sprint">⚡</button>
       <button id="btn-break" class="mobile-btn" type="button" aria-label="Break">⛏</button>
       <button id="btn-place" class="mobile-btn" type="button" aria-label="Place">▣</button>
+      <button id="btn-pause" class="mobile-btn mobile-btn-small" type="button" aria-label="Pause">☰</button>
       <button id="btn-inventory" class="mobile-btn" type="button" aria-label="Inventory">🎒</button>
     </div>
     <div id="mobile-hotbar">
@@ -430,6 +546,84 @@
         return coarsePointer || (touchCapable && narrowScreen) || mobileUa;
       }
 
+      const ITEM_NAMES = {
+        1: 'Grass', 2: 'Dirt', 3: 'Stone', 4: 'Wood', 5: 'Leaves', 6: 'Sand',
+        7: 'Water', 8: 'Bedrock', 9: 'Cobble', 10: 'Planks', 11: 'Glass', 12: 'Snow',
+        13: 'Table', 14: 'Lava', 15: 'Obsidian', 16: 'Grass', 17: 'Flower', 18: 'Wheat',
+      };
+
+      function callWasmGlobal(name, ...args) {
+        const api = window.wasmBindings;
+        if (!api || typeof api[name] !== 'function') return false;
+        api[name](...args);
+        return true;
+      }
+
+      function updateHotbarSelection(index) {
+        const hotbar = document.getElementById('mobile-hotbar');
+        if (!hotbar) return;
+        hotbar.querySelectorAll('.hotbar-slot').forEach((el) => {
+          el.classList.toggle('selected', parseInt(el.dataset.index, 10) === index);
+        });
+      }
+
+      function ensureInventoryGrid() {
+        const grid = document.getElementById('inventory-grid');
+        if (!grid || grid.childElementCount > 0) return;
+        for (let i = 0; i < 36; i++) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'inv-slot' + (i < 9 ? ' hotbar-row' : '');
+          btn.dataset.index = String(i);
+          btn.addEventListener('click', () => callWasmGlobal('nc_inventory_click_slot', i));
+          grid.appendChild(btn);
+        }
+      }
+
+      function parseSlotsCsv(csv) {
+        if (!csv) return [];
+        return csv.split(';').map((part) => {
+          const [item, count] = part.split(':');
+          return { item: parseInt(item, 10) || 0, count: parseInt(count, 10) || 0 };
+        });
+      }
+
+      window.ncUpdateGameUi = function(screen, hotbarIndex, pickedSlot, slotsCsv) {
+        ensureInventoryGrid();
+        document.body.classList.toggle('menu-pause', screen === 1);
+        document.body.classList.toggle('menu-inventory', screen === 2);
+        const slots = parseSlotsCsv(slotsCsv);
+        const grid = document.getElementById('inventory-grid');
+        if (grid) {
+          grid.querySelectorAll('.inv-slot').forEach((el, i) => {
+            const slot = slots[i] || { item: 0, count: 0 };
+            const name = ITEM_NAMES[slot.item] || '';
+            const key = i < 9 ? `<div class="slot-key">${i + 1}</div>` : '';
+            el.innerHTML = slot.item === 0
+              ? `${key}<span style="opacity:0.35">·</span>`
+              : `${key}<div>${name}</div><div>x${slot.count}</div>`;
+            el.classList.toggle('selected-hotbar', i === hotbarIndex);
+            el.classList.toggle('picked', pickedSlot === i);
+          });
+        }
+        updateHotbarSelection(hotbarIndex);
+        const hotbar = document.getElementById('mobile-hotbar');
+        if (hotbar && slots.length >= 9) {
+          hotbar.querySelectorAll('.hotbar-slot').forEach((el, i) => {
+            const slot = slots[i] || { item: 0, count: 0 };
+            const short = ITEM_NAMES[slot.item];
+            el.textContent = short ? `${i + 1}\n${slot.count}` : String(i + 1);
+          });
+        }
+      };
+
+      window.ncUpdateMobileHotbar = updateHotbarSelection;
+
+      document.getElementById('btn-resume')?.addEventListener('click', () => callWasmGlobal('nc_mobile_resume'));
+      document.getElementById('btn-restart')?.addEventListener('click', () => callWasmGlobal('nc_mobile_restart'));
+      document.getElementById('btn-open-inventory')?.addEventListener('click', () => callWasmGlobal('nc_mobile_toggle_inventory'));
+      document.getElementById('btn-close-inventory')?.addEventListener('click', () => callWasmGlobal('nc_mobile_resume'));
+
       if (!isMobileDevice()) return;
 
       document.body.classList.add('mobile');
@@ -464,8 +658,6 @@
           el.classList.toggle('selected', parseInt(el.dataset.index, 10) === index);
         });
       }
-
-      window.ncUpdateMobileHotbar = updateHotbarSelection;
 
       function markReady() {
         document.body.classList.add('ready');
@@ -674,6 +866,12 @@
         bindButton('btn-place', () => {
           if (!canUseGameplayControls()) return;
           w.nc_mobile_place();
+        });
+
+        bindButton('btn-pause', () => {
+          if (!isPlaying()) return;
+          resetJoystick();
+          w.nc_mobile_open_pause();
         });
 
         bindButton('btn-inventory', () => {
