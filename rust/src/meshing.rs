@@ -2,6 +2,9 @@ use crate::blocks::{BlockId, Face};
 use crate::chunk_material::VoxelChunkMaterial;
 use crate::chunk_gen::get_block_local;
 use crate::config::{CHUNK_SIZE, WORLD_HEIGHT};
+use crate::decorations::{
+    retain_foliage_chunks, sync_chunk_decorations, FoliageAssets, FoliageChunkMap,
+};
 use crate::world::VoxelWorld;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
@@ -312,6 +315,8 @@ pub fn sync_chunk_meshes(
     chunk_mat: Res<ChunkMaterial>,
     mut queue: ResMut<RemeshQueue>,
     mut entity_map: ResMut<ChunkEntityMap>,
+    foliage_assets: Res<FoliageAssets>,
+    mut foliage_map: ResMut<FoliageChunkMap>,
 ) {
     let mut budget = if cfg!(target_arch = "wasm32") { 12 } else { 6 };
     let player_chunk = world.player_chunk;
@@ -325,6 +330,7 @@ pub fn sync_chunk_meshes(
             false
         }
     });
+    retain_foliage_chunks(&mut commands, &mut foliage_map, &loaded);
     queue.retain_loaded(&loaded);
 
     for &(cx, cz) in &world.loaded_chunks {
@@ -349,6 +355,15 @@ pub fn sync_chunk_meshes(
         if let Some(chunk) = world.inner.chunks.get_mut(&(cx, cz)) {
             chunk.dirty = false;
         }
+
+        sync_chunk_decorations(
+            &mut commands,
+            &world.inner,
+            &foliage_assets,
+            &mut foliage_map,
+            cx,
+            cz,
+        );
 
         let handle = meshes.add(mesh);
         if let Some(&entity) = entity_map.entities.get(&(cx, cz)) {

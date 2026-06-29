@@ -8,8 +8,10 @@ use rand::Rng;
 
 const MOB_CAP: usize = 36;
 const SPAWN_INTERVAL: f32 = 3.5;
-const WASM_MOB_CAP: usize = 14;
-const WASM_SPAWN_INTERVAL: f32 = 5.5;
+const WASM_MOB_CAP: usize = 20;
+const WASM_SPAWN_INTERVAL: f32 = 3.0;
+const SPAWN_DIST_MIN: f32 = 6.0;
+const SPAWN_DIST_MAX: f32 = 24.0;
 const ATTACK_DAMAGE: i32 = 5;
 const ATTACK_RANGE: f32 = 4.0;
 
@@ -103,6 +105,7 @@ pub struct MobManager {
     pub count: usize,
     pub next_id: u32,
     pub spawn_timer: f32,
+    pub initial_spawn_done: bool,
 }
 
 pub fn mob_spawner(
@@ -127,11 +130,16 @@ pub fn mob_spawner(
     if manager.spawn_timer > 0.0 {
         return;
     }
-    manager.spawn_timer = spawn_interval();
+    manager.spawn_timer = if manager.initial_spawn_done {
+        spawn_interval()
+    } else {
+        manager.initial_spawn_done = true;
+        1.0
+    };
 
     let mut rng = rand::thread_rng();
     let angle = rng.gen_range(0.0..std::f32::consts::TAU);
-    let dist = rng.gen_range(12.0..36.0);
+    let dist = rng.gen_range(SPAWN_DIST_MIN..SPAWN_DIST_MAX);
     let x = player.position.x + angle.cos() * dist;
     let z = player.position.z + angle.sin() * dist;
     let ix = x.floor() as i32;

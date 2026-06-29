@@ -43,6 +43,17 @@ pub fn draw_hud(
     let hud_color = egui::Color32::from_rgb(235, 235, 245);
 
     if ui_state.screen == MenuScreen::Playing {
+        let center = ctx.screen_rect().center();
+        let stroke = egui::Stroke::new(1.5, egui::Color32::from_rgba_unmultiplied(240, 240, 245, 210));
+        let painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::new("crosshair"),
+        ));
+        let r = 5.0;
+        painter.line_segment([center + egui::vec2(-r, 0.0), center + egui::vec2(r, 0.0)], stroke);
+        painter.line_segment([center + egui::vec2(0.0, -r), center + egui::vec2(0.0, r)], stroke);
+        painter.circle_filled(center, 1.5, egui::Color32::from_rgba_unmultiplied(240, 240, 245, 200));
+
         egui::Area::new(egui::Id::new("hud_top"))
             .fixed_pos(egui::pos2(10.0, 10.0))
             .show(ctx, |ui| {

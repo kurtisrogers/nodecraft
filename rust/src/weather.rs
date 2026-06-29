@@ -132,8 +132,8 @@ pub fn update_lights(
     let night_ambient = state.moonlight * 320.0;
     let mut brightness = day_ambient + night_ambient;
     if cfg!(target_arch = "wasm32") {
-        // Keep nights readable on mobile without flattening the whole cycle.
-        let floor = 140.0 + state.daylight * 520.0 + state.moonlight * 180.0;
+        // Keep nights readable on mobile without washing out stars/sky.
+        let floor = 90.0 + state.daylight * 520.0 + state.moonlight * 120.0;
         brightness = brightness.max(floor);
     }
     ambient.brightness = brightness;
