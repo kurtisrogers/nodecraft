@@ -265,6 +265,10 @@ fn push_cross_decoration(
     let fx = x as f32;
     let fy = y as f32;
     let fz = z as f32;
+    // Inset geometry so the camera does not clip through full-block quads.
+    const INSET: f32 = 0.12;
+    const BOTTOM: f32 = 0.05;
+    const TOP: f32 = 0.92;
     let color = block.color(Face::Side);
     let linear = color.to_linear();
     let rgba = [linear.red, linear.green, linear.blue, linear.alpha];
@@ -272,19 +276,19 @@ fn push_cross_decoration(
     let quads: [([[f32; 3]; 4], [f32; 3]); 2] = [
         (
             [
-                [fx, fy, fz + 0.5],
-                [fx + 1.0, fy, fz + 0.5],
-                [fx + 1.0, fy + 1.0, fz + 0.5],
-                [fx, fy + 1.0, fz + 0.5],
+                [fx + INSET, fy + BOTTOM, fz + 0.5],
+                [fx + 1.0 - INSET, fy + BOTTOM, fz + 0.5],
+                [fx + 1.0 - INSET, fy + TOP, fz + 0.5],
+                [fx + INSET, fy + TOP, fz + 0.5],
             ],
             [0.0, 0.0, 1.0],
         ),
         (
             [
-                [fx + 0.5, fy, fz],
-                [fx + 0.5, fy, fz + 1.0],
-                [fx + 0.5, fy + 1.0, fz + 1.0],
-                [fx + 0.5, fy + 1.0, fz],
+                [fx + 0.5, fy + BOTTOM, fz + INSET],
+                [fx + 0.5, fy + BOTTOM, fz + 1.0 - INSET],
+                [fx + 0.5, fy + TOP, fz + 1.0 - INSET],
+                [fx + 0.5, fy + TOP, fz + INSET],
             ],
             [1.0, 0.0, 0.0],
         ),
