@@ -138,7 +138,8 @@ pub fn run() {
             update_fps,
         ),
     );
-    app.add_systems(Update, (update_clouds, update_sky));
+    app.add_systems(Update, update_clouds);
+    app.add_systems(Update, update_sky.after(update_lights));
     #[cfg(not(target_arch = "wasm32"))]
     if !wasm {
         app.add_systems(Update, (mob_spawner, mob_ai));

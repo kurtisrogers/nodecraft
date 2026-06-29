@@ -1,6 +1,6 @@
 use crate::config::EYE_HEIGHT;
-use crate::player::{PlayerCamera, PlayerState};
-use crate::weather::{celestial_state, DayNight, MoonLight, SunLight};
+use crate::player::PlayerState;
+use crate::weather::{celestial_state, DayNight};
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
@@ -148,9 +148,6 @@ fn build_star_mesh() -> Mesh {
 pub fn update_sky(
     day: Res<DayNight>,
     player: Res<PlayerState>,
-    camera: Query<&Transform, With<PlayerCamera>>,
-    sun_light: Query<&Transform, (With<SunLight>, Without<MoonLight>)>,
-    moon_light: Query<&Transform, (With<MoonLight>, Without<SunLight>)>,
     mut tick: ResMut<SkyTick>,
     mut sun: Query<
         (&mut Transform, &mut Visibility),
@@ -172,19 +169,11 @@ pub fn update_sky(
 
     let state = celestial_state(&day);
     let anchor = player.position;
-    let camera_pos = camera
-        .get_single()
-        .map(|t| t.translation)
-        .unwrap_or(anchor + Vec3::Y * EYE_HEIGHT);
+    let camera_pos = anchor + Vec3::Y * EYE_HEIGHT;
 
-    let sun_forward = sun_light
-        .get_single()
-        .map(|t| t.forward().as_vec3())
-        .unwrap_or(Vec3::NEG_Y);
-    let moon_forward = moon_light
-        .get_single()
-        .map(|t| t.forward().as_vec3())
-        .unwrap_or(Vec3::Y);
+    // Match update_lights rotations without querying those transforms (B0001 conflict).
+    let sun_forward = Quat::from_rotation_x(state.sun_angle) * Vec3::NEG_Z;
+    let moon_forward = Quat::from_rotation_x(state.moon_angle) * Vec3::NEG_Z;
 
     if let Ok((mut transform, mut visibility)) = sun.get_single_mut() {
         transform.translation = anchor - sun_forward * SKY_DISTANCE;
