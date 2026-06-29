@@ -104,11 +104,7 @@ pub fn run() {
         init_mobile,
     ))
     .add_systems(PostStartup, bootstrap_player_meshes);
-    app.add_systems(Startup, setup_clouds);
-    #[cfg(not(target_arch = "wasm32"))]
-    if !wasm {
-        app.add_systems(Startup, setup_sky);
-    }
+    app.add_systems(Startup, (setup_clouds, setup_sky));
     app
     .add_systems(
         Update,
@@ -142,10 +138,10 @@ pub fn run() {
             update_fps,
         ),
     );
-    app.add_systems(Update, update_clouds);
+    app.add_systems(Update, (update_clouds, update_sky));
     #[cfg(not(target_arch = "wasm32"))]
     if !wasm {
-        app.add_systems(Update, (mob_spawner, mob_ai, update_sky));
+        app.add_systems(Update, (mob_spawner, mob_ai));
     }
     if !wasm {
         #[cfg(not(target_arch = "wasm32"))]
