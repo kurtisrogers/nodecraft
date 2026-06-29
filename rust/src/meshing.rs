@@ -422,6 +422,7 @@ pub fn update_world_chunks(
         world.player_chunk = new_chunk;
         let radius = world.inner.render_distance * CHUNK_SIZE + 64;
         crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, radius);
+        crate::chunk_gen::ensure_volcanoes_near(&mut world.inner, px, pz, radius);
         let previous: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
         world.loaded_chunks = world.inner.load_chunks_around(px, pz);
         let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();

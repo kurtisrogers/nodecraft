@@ -8,8 +8,26 @@ use rand::Rng;
 
 const MOB_CAP: usize = 36;
 const SPAWN_INTERVAL: f32 = 3.5;
+const WASM_MOB_CAP: usize = 14;
+const WASM_SPAWN_INTERVAL: f32 = 5.5;
 const ATTACK_DAMAGE: i32 = 5;
 const ATTACK_RANGE: f32 = 4.0;
+
+fn mob_cap() -> usize {
+    if cfg!(target_arch = "wasm32") {
+        WASM_MOB_CAP
+    } else {
+        MOB_CAP
+    }
+}
+
+fn spawn_interval() -> f32 {
+    if cfg!(target_arch = "wasm32") {
+        WASM_SPAWN_INTERVAL
+    } else {
+        SPAWN_INTERVAL
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MobType {
@@ -99,7 +117,7 @@ pub fn mob_spawner(
     existing: Query<&MobEntity>,
 ) {
     manager.count = existing.iter().filter(|m| m.alive).count();
-    if manager.count >= MOB_CAP {
+    if manager.count >= mob_cap() {
         return;
     }
     if !player.terrain_ready {
@@ -109,7 +127,7 @@ pub fn mob_spawner(
     if manager.spawn_timer > 0.0 {
         return;
     }
-    manager.spawn_timer = SPAWN_INTERVAL;
+    manager.spawn_timer = spawn_interval();
 
     let mut rng = rand::thread_rng();
     let angle = rng.gen_range(0.0..std::f32::consts::TAU);
@@ -120,6 +138,9 @@ pub fn mob_spawner(
     let iz = z.floor() as i32;
 
     if !world.inner.noise.is_land(ix, iz) {
+        return;
+    }
+    if world.inner.noise.is_in_volcano(ix, iz) {
         return;
     }
 

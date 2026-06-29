@@ -1,6 +1,111 @@
 use crate::blocks::BlockId;
-use crate::config::WORLD_HEIGHT;
+use crate::config::{SEA_LEVEL, WORLD_HEIGHT};
 use crate::world::VoxelWorld;
+
+pub fn place_lava_column(world: &mut VoxelWorld, wx: i32, wy: i32, wz: i32) {
+    if wy < 1 || wy >= WORLD_HEIGHT - 1 {
+        return;
+    }
+    let below = world.peek_block(wx, wy - 1, wz);
+    if !below.solid() && below != BlockId::Lava {
+        return;
+    }
+    if world.peek_block(wx, wy, wz) == BlockId::Air {
+        world.set_block(wx, wy, wz, BlockId::Lava);
+    }
+}
+
+pub fn place_volcano(world: &mut VoxelWorld, center_x: i32, center_z: i32) {
+    const RADIUS: i32 = 28;
+    const CRATER: i32 = 7;
+    let peak_y = world.noise.terrain_height(center_x, center_z);
+    let flow_angle = world.noise.roll(center_x, center_z, 71) * std::f32::consts::TAU;
+    let flow_dx = flow_angle.cos();
+    let flow_dz = flow_angle.sin();
+
+    for dx in -RADIUS..=RADIUS {
+        for dz in -RADIUS..=RADIUS {
+            let wx = center_x + dx;
+            let wz = center_z + dz;
+            let dist = ((dx * dx + dz * dz) as f32).sqrt();
+            if dist > RADIUS as f32 {
+                continue;
+            }
+
+            let surface_y = world.noise.terrain_height(wx, wz);
+            let in_crater = dist < CRATER as f32;
+
+            if in_crater {
+                for y in (surface_y - 5).max(1)..=surface_y {
+                    world.set_block(wx, y, wz, BlockId::Air);
+                }
+                let floor = (surface_y - 3).max(world.noise.base_land_height(wx, wz) + 2);
+                world.set_block(wx, floor - 1, wz, BlockId::Stone);
+                for y in floor..=floor + 1 {
+                    world.set_block(wx, y, wz, BlockId::Lava);
+                }
+                if dist > CRATER as f32 - 2.5 {
+                    world.set_block(wx, floor - 1, wz, BlockId::Obsidian);
+                }
+            } else {
+                let base = world.noise.base_land_height(wx, wz);
+                for y in base..=surface_y {
+                    let cur = world.peek_block(wx, y, wz);
+                    if !matches!(cur, BlockId::Grass | BlockId::Dirt | BlockId::Stone | BlockId::Sand) {
+                        continue;
+                    }
+                    let t = if surface_y > base {
+                        (y - base) as f32 / (surface_y - base) as f32
+                    } else {
+                        1.0
+                    };
+                    let block = if t > 0.72 {
+                        BlockId::Cobblestone
+                    } else if t > 0.45 {
+                        BlockId::Stone
+                    } else {
+                        continue;
+                    };
+                    world.set_block(wx, y, wz, block);
+                }
+            }
+        }
+    }
+
+    place_lava_flow(world, center_x, center_z, peak_y, flow_dx, flow_dz);
+}
+
+fn place_lava_flow(
+    world: &mut VoxelWorld,
+    center_x: i32,
+    center_z: i32,
+    start_y: i32,
+    dir_x: f32,
+    dir_z: f32,
+) {
+    let mut x = center_x as f32;
+    let mut z = center_z as f32;
+    let mut last_y = start_y;
+
+    for step in 0..16 {
+        x += dir_x * 2.4;
+        z += dir_z * 2.4;
+        let wx = x.round() as i32;
+        let wz = z.round() as i32;
+        let y = world.noise.terrain_height(wx, wz);
+        if y <= SEA_LEVEL + 2 {
+            break;
+        }
+        if y > last_y + 3 {
+            break;
+        }
+        last_y = y;
+        place_lava_column(world, wx, y, wz);
+        if step % 3 == 0 {
+            place_lava_column(world, wx + dir_z.round() as i32, y, wz + dir_x.round() as i32);
+        }
+    }
+}
 
 pub fn place_house(world: &mut VoxelWorld, origin_x: i32, origin_y: i32, origin_z: i32) {
     let w = 7;
