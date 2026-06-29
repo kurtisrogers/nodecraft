@@ -5,6 +5,7 @@ use crate::config::{
     PLAYER_WIDTH, SPRINT_SPEED, WALK_SPEED, WORLD_HEIGHT,
 };
 use crate::inventory::GameInventory;
+use crate::menu::GameUiState;
 use crate::meshing::{ChunkMesh, RemeshQueue, VoxelWorldResource};
 use crate::mobile::{is_controlling, MobileInput};
 use bevy::input::mouse::MouseMotion;
@@ -14,7 +15,7 @@ use bevy::render::view::Msaa;
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use bevy::pbr::{DistanceFog, FogFalloff};
 
-const PLAYER_AABB: Aabb = Aabb {
+pub(crate) const PLAYER_AABB: Aabb = Aabb {
     half_x: PLAYER_WIDTH * 0.5,
     half_z: PLAYER_WIDTH * 0.5,
     height: PLAYER_HEIGHT,
@@ -31,7 +32,6 @@ pub struct PlayerState {
     pub attack_cooldown: f32,
     pub lava_timer: f32,
     pub cursor_locked: bool,
-    pub inventory_open: bool,
     pub terrain_ready: bool,
     pub walk_bob_phase: f32,
 }
@@ -48,7 +48,6 @@ impl Default for PlayerState {
             attack_cooldown: 0.0,
             lava_timer: 0.0,
             cursor_locked: false,
-            inventory_open: false,
             terrain_ready: false,
             walk_bob_phase: 0.0,
         }
@@ -116,8 +115,9 @@ pub fn lock_cursor(
     keys: Res<ButtonInput<KeyCode>>,
     mut player: ResMut<PlayerState>,
     mobile: Res<MobileInput>,
+    ui: Res<GameUiState>,
 ) {
-    if player.inventory_open || mobile.is_mobile {
+    if !crate::menu::is_playing(&ui) || mobile.is_mobile {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
@@ -142,8 +142,9 @@ pub fn mouse_look(
     mut player: ResMut<PlayerState>,
     mut camera: Query<&mut Transform, With<PlayerCamera>>,
     mobile: Res<MobileInput>,
+    ui: Res<GameUiState>,
 ) {
-    if !is_controlling(&player, &mobile) {
+    if !is_controlling(&player, &mobile, &ui) {
         motion.clear();
         return;
     }
@@ -173,12 +174,13 @@ pub fn player_movement(
     mut player: ResMut<PlayerState>,
     mut world: ResMut<VoxelWorldResource>,
     mobile: Res<MobileInput>,
+    ui: Res<GameUiState>,
 ) {
     if !player.terrain_ready {
         player.velocity = Vec3::ZERO;
         return;
     }
-    if player.inventory_open {
+    if !crate::menu::is_playing(&ui) {
         return;
     }
     let dt = time.delta_secs().min(0.05);
@@ -376,8 +378,9 @@ pub fn block_interaction(
     mut queue: ResMut<RemeshQueue>,
     camera: Query<&Transform, With<PlayerCamera>>,
     mobile: Res<MobileInput>,
+    ui: Res<GameUiState>,
 ) {
-    if !is_controlling(&player, &mobile) {
+    if !is_controlling(&player, &mobile, &ui) {
         return;
     }
     let Ok(cam) = camera.get_single() else { return };
@@ -446,7 +449,11 @@ pub fn hotbar_keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut inventory: ResMut<GameInventory>,
     mobile: Res<MobileInput>,
+    ui: Res<GameUiState>,
 ) {
+    if !crate::menu::is_playing(&ui) {
+        return;
+    }
     if let Some(index) = mobile.hotbar_select {
         if index < crate::config::HOTBAR_SIZE {
             inventory.hotbar_index = index;
@@ -468,32 +475,6 @@ pub fn hotbar_keys(
             inventory.hotbar_index = i;
         }
     }
-}
-
-pub fn toggle_inventory(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut player: ResMut<PlayerState>,
-    mobile: Res<MobileInput>,
-) {
-    if mobile.is_mobile {
-        return;
-    }
-    if keys.just_pressed(KeyCode::KeyE) || mobile.inventory_pressed {
-        player.inventory_open = !player.inventory_open;
-    }
-    if keys.just_pressed(KeyCode::Escape) {
-        player.inventory_open = false;
-    }
-}
-
-pub fn mobile_hotbar_cycle(
-    mut inventory: ResMut<GameInventory>,
-    mobile: Res<MobileInput>,
-) {
-    if !mobile.is_mobile || !mobile.inventory_pressed {
-        return;
-    }
-    inventory.hotbar_index = (inventory.hotbar_index + 1) % crate::config::HOTBAR_SIZE;
 }
 
 pub fn update_terrain_ready(
@@ -523,9 +504,6 @@ pub fn mobile_session_start(
     mobile: Res<MobileInput>,
     mut was_active: Local<bool>,
 ) {
-    if mobile.is_mobile {
-        player.inventory_open = false;
-    }
     if mobile.active && !*was_active {
         player.pitch = if cfg!(target_arch = "wasm32") { -0.35 } else { 0.0 };
         player.yaw = 0.0;
