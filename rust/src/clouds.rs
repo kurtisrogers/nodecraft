@@ -6,6 +6,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
 const CLOUD_COUNT: usize = 10;
+const WASM_CLOUD_COUNT: usize = 6;
 const CLOUD_HEIGHT_MIN: f32 = 68.0;
 const CLOUD_HEIGHT_MAX: f32 = 96.0;
 const CLOUD_SPREAD: f32 = 110.0;
@@ -21,9 +22,6 @@ pub fn setup_clouds(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    if cfg!(target_arch = "wasm32") {
-        return;
-    }
     let cloud_material = materials.add(StandardMaterial {
         base_color: Color::srgba(0.97, 0.98, 1.0, 0.92),
         emissive: LinearRgba::new(0.15, 0.16, 0.2, 1.0),
@@ -33,7 +31,7 @@ pub fn setup_clouds(
     });
     let mut rng = SmallRng::seed_from_u64(0x_c10d_5eed);
     let count = if cfg!(target_arch = "wasm32") {
-        7
+        WASM_CLOUD_COUNT
     } else {
         CLOUD_COUNT
     };
@@ -191,9 +189,6 @@ pub fn update_clouds(
     player: Res<PlayerState>,
     mut clouds: Query<(&mut VoxelCloud, &mut Transform)>,
 ) {
-    if cfg!(target_arch = "wasm32") {
-        return;
-    }
     let dt = time.delta_secs();
     let anchor = player.position;
 

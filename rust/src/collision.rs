@@ -118,7 +118,7 @@ pub fn depenetrate(world: &VoxelWorld, pos: &mut Vec3, aabb: Aabb) -> bool {
     for bx in min_b[0]..=max_b[0] {
         for by in min_b[1]..=max_b[1] {
             for bz in min_b[2]..=max_b[2] {
-                if !world.peek_block(bx, by, bz).solid() {
+                if !world.peek_block(bx, by, bz).blocks_collision() {
                     continue;
                 }
                 let block_min_v = Vec3::new(bx as f32, by as f32, bz as f32);
@@ -211,7 +211,7 @@ pub fn overlaps_solid(world: &VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
     for bx in min_b[0]..=max_b[0] {
         for by in min_b[1]..=max_b[1] {
             for bz in min_b[2]..=max_b[2] {
-                if world.peek_block(bx, by, bz).solid() {
+                if world.peek_block(bx, by, bz).blocks_collision() {
                     return true;
                 }
             }
@@ -233,7 +233,7 @@ pub fn is_on_ground(world: &VoxelWorld, pos: Vec3, aabb: Aabb) -> bool {
         let bx = (pos.x + dx).floor() as i32;
         let by = probe.floor() as i32;
         let bz = (pos.z + dz).floor() as i32;
-        if world.peek_block(bx, by, bz).solid() {
+        if world.peek_block(bx, by, bz).blocks_collision() {
             return true;
         }
     }
@@ -302,7 +302,7 @@ fn resolve_axis(
             for bx in min_b[0]..=max_b[0] {
                 for by in min_b[1]..=max_b[1] {
                     for bz in min_b[2]..=max_b[2] {
-                        if !world.peek_block(bx, by, bz).solid() {
+                        if !world.peek_block(bx, by, bz).blocks_collision() {
                             continue;
                         }
                         let block_min_x = bx as f32;
@@ -341,7 +341,7 @@ fn resolve_axis(
             for bx in min_b[0]..=max_b[0] {
                 for by in min_b[1]..=max_b[1] {
                     for bz in min_b[2]..=max_b[2] {
-                        if !world.peek_block(bx, by, bz).solid() {
+                        if !world.peek_block(bx, by, bz).blocks_collision() {
                             continue;
                         }
                         let block_min_y = by as f32;
@@ -380,7 +380,7 @@ fn resolve_axis(
             for bx in min_b[0]..=max_b[0] {
                 for by in min_b[1]..=max_b[1] {
                     for bz in min_b[2]..=max_b[2] {
-                        if !world.peek_block(bx, by, bz).solid() {
+                        if !world.peek_block(bx, by, bz).blocks_collision() {
                             continue;
                         }
                         let block_min_z = bz as f32;
@@ -439,7 +439,7 @@ fn floor_height(world: &VoxelWorld, x: f32, z: f32, aabb: Aabb) -> Option<f32> {
         let bx = (x + dx).floor() as i32;
         let bz = (z + dz).floor() as i32;
         for y in (0..WORLD_HEIGHT).rev() {
-            if world.peek_block(bx, y, bz).solid() {
+            if world.peek_block(bx, y, bz).blocks_collision() {
                 let top = y as f32 + 1.0;
                 best = Some(best.map_or(top, |v: f32| v.max(top)));
                 break;
@@ -572,5 +572,31 @@ mod tests {
         let mut vel = Vec3::new(8.0, 0.0, 0.0);
         move_aabb(&mut world, &mut pos, &mut vel, aabb, 0.1, true);
         assert!(pos.x < 1.75, "player should be blocked by wall, x={}", pos.x);
+    }
+
+    #[test]
+    fn player_walks_through_tall_grass() {
+        let mut world = test_platform();
+        world.set_block(1, 1, 0, BlockId::TallGrass);
+        let aabb = Aabb::from_uniform(0.3, 1.7);
+        let mut pos = Vec3::new(0.5, 1.0, 0.5);
+        let mut vel = Vec3::new(6.0, 0.0, 0.0);
+        let start_x = pos.x;
+        move_aabb(&mut world, &mut pos, &mut vel, aabb, 0.1, true);
+        assert!(pos.x > start_x + 0.4, "tall grass should not block movement, x={}", pos.x);
+        assert!(!overlaps_solid(&world, pos, aabb));
+    }
+
+    #[test]
+    fn player_walks_through_leaves() {
+        let mut world = test_platform();
+        world.set_block(1, 2, 0, BlockId::Leaves);
+        let aabb = Aabb::from_uniform(0.3, 1.7);
+        let mut pos = Vec3::new(0.5, 1.0, 0.5);
+        let mut vel = Vec3::new(6.0, 0.0, 0.0);
+        let start_x = pos.x;
+        move_aabb(&mut world, &mut pos, &mut vel, aabb, 0.1, true);
+        assert!(pos.x > start_x + 0.4, "leaves should not block movement, x={}", pos.x);
+        assert!(!overlaps_solid(&world, pos, aabb));
     }
 }
