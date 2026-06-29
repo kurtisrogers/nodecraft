@@ -277,7 +277,7 @@ fn nudge_eye_clear(world: &crate::world::VoxelWorld, pos: &mut Vec3) {
         let bx = pos.x.floor() as i32;
         let by = eye_y.floor() as i32;
         let bz = pos.z.floor() as i32;
-        if !world.peek_block(bx, by, bz).solid() {
+        if !world.peek_block(bx, by, bz).blocks_collision() {
             break;
         }
         pos.y += 0.25;

@@ -360,6 +360,42 @@
       opacity: 0.65;
       font-size: 10px;
     }
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      pointer-events: none;
+      z-index: 15;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    #crosshair::before,
+    #crosshair::after {
+      content: "";
+      position: absolute;
+      background: rgba(240, 240, 245, 0.85);
+      border-radius: 1px;
+    }
+    #crosshair::before {
+      left: 50%;
+      top: 2px;
+      width: 2px;
+      height: 10px;
+      margin-left: -1px;
+    }
+    #crosshair::after {
+      top: 50%;
+      left: 2px;
+      width: 10px;
+      height: 2px;
+      margin-top: -1px;
+    }
+    body.playing:not(.menu-pause):not(.menu-inventory) #crosshair {
+      opacity: 1;
+    }
   </style>
   <link data-trunk rel="rust" href="Cargo.toml" data-wasm-opt="z" />
 </head>
@@ -374,6 +410,7 @@
     <button id="loading-dismiss" type="button" hidden>Game ready — tap to play</button>
   </div>
   <canvas id="canvas"></canvas>
+  <div id="crosshair" aria-hidden="true"></div>
 
   <div id="pause-overlay" hidden>
     <div class="game-panel" role="dialog" aria-label="Pause menu">

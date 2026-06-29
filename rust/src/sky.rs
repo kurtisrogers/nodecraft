@@ -8,6 +8,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
 const SKY_DISTANCE: f32 = 280.0;
+const STAR_DISTANCE: f32 = 95.0;
 const SUN_RADIUS: f32 = 11.0;
 const MOON_RADIUS: f32 = 9.0;
 const SKY_UPDATE_INTERVAL: u32 = 2;
@@ -145,13 +146,13 @@ pub fn setup_sky(
     let mut rng = SmallRng::seed_from_u64(0x5a7e_c001);
     for _ in 0..STAR_SPRITE_COUNT {
         let direction = random_sky_direction(&mut rng);
-        let base_scale = rng.gen_range(0.18..0.42);
+        let base_scale = rng.gen_range(0.35..0.72);
         let twinkle_phase = rng.gen_range(0.0..std::f32::consts::TAU);
         let twinkle_speed = rng.gen_range(1.6..4.8);
         let tint = rng.gen_range(0.92..1.0);
         let material = materials.add(StandardMaterial {
-            base_color: Color::srgba(tint, tint, 1.0, 0.95),
-            emissive: LinearRgba::new(0.7, 0.72, 0.95, 1.0),
+            base_color: Color::srgba(tint, tint, 1.0, 0.98),
+            emissive: LinearRgba::new(1.4, 1.45, 1.8, 1.0),
             unlit: true,
             ..default()
         });
@@ -364,14 +365,14 @@ pub fn update_sky(
                 continue;
             }
             *visibility = Visibility::Visible;
-            transform.translation = anchor + sprite.direction * SKY_DISTANCE;
+            transform.translation = anchor + sprite.direction * STAR_DISTANCE;
             billboard_toward_camera(&mut transform, camera_pos);
 
             let t = elapsed * sprite.twinkle_speed + sprite.twinkle_phase;
             let pulse = 0.5 + 0.5 * t.sin();
             let sparkle = pulse.powf(2.6);
             let flash = (t * 0.41 + sprite.twinkle_phase * 1.7).sin().max(0.0).powi(10);
-            let brightness = (0.35 + sparkle * 0.55 + flash * 0.75) * night;
+            let brightness = (0.55 + sparkle * 0.85 + flash * 1.1) * night;
 
             if let Some(mat) = materials.get_mut(&sprite.material) {
                 mat.emissive = LinearRgba::new(

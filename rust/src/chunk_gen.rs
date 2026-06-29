@@ -281,14 +281,7 @@ fn place_surface_decorations(
         // Trees and bushes are placed in world_gen::decorate_chunk_vegetation.
     }
 
-    let above = surface_y + 1;
-    if above < WORLD_HEIGHT && get_block_local(blocks, x, above, z) == BlockId::Air {
-        if noise.should_place_flower(world_x, world_z) {
-            set_block_local(blocks, x, above, z, BlockId::Flower);
-        } else if noise.should_place_tall_grass(world_x, world_z) {
-            set_block_local(blocks, x, above, z, BlockId::TallGrass);
-        }
-    }
+    // Grass and flowers are billboard sprites (see decorations.rs), not voxel blocks.
 }
 
 fn find_surface_y(blocks: &[BlockId], x: i32, z: i32, hint: i32) -> Option<i32> {

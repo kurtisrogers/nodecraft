@@ -11,6 +11,8 @@ pub struct VoxelWorld {
     pub modifications: HashMap<(i32, i32, i32), BlockId>,
     pub placed_settlements: std::collections::HashSet<(i32, i32)>,
     pub placed_volcanoes: std::collections::HashSet<(i32, i32)>,
+    /// Farm plots that should get wheat billboard sprites (origin_x, origin_y, origin_z, size).
+    pub wheat_patches: Vec<(i32, i32, i32, i32)>,
     pub render_distance: i32,
 }
 
@@ -23,6 +25,7 @@ impl VoxelWorld {
             modifications: HashMap::new(),
             placed_settlements: std::collections::HashSet::new(),
             placed_volcanoes: std::collections::HashSet::new(),
+            wheat_patches: Vec::new(),
             render_distance: RENDER_DISTANCE,
         }
     }

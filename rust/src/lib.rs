@@ -1,8 +1,10 @@
+mod assets;
 mod chunk_material;
 mod blocks;
 mod chunk_gen;
 mod collision;
 mod config;
+mod decorations;
 mod menu;
 mod inventory;
 mod meshing;
@@ -17,6 +19,7 @@ mod ui;
 mod weather;
 mod world;
 mod world_gen;
+mod fp_view;
 
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -47,6 +50,8 @@ use ui::draw_hud;
 use weather::{MoonLight, SunLight, update_day_night, update_lights};
 use inventory::GameInventory;
 use clouds::{setup_clouds, update_clouds};
+use decorations::{billboard_foliage, setup_decorations};
+use fp_view::{setup_fp_view, update_fp_view};
 use sky::{setup_sky, update_sky};
 
 pub fn run() {
@@ -104,11 +109,12 @@ pub fn run() {
     .add_systems(Startup, (
         setup_scene,
         setup_fog,
+        setup_decorations,
         spawn_player,
         init_world,
         init_mobile,
     ))
-    .add_systems(PostStartup, bootstrap_player_meshes);
+    .add_systems(PostStartup, (bootstrap_player_meshes, setup_fp_view));
     app.add_systems(Startup, (setup_clouds, setup_sky));
     app
     .add_systems(
@@ -131,9 +137,11 @@ pub fn run() {
             notify_mobile_ui_ready,
             sync_html_ui,
             process_restart,
+            update_fp_view,
         )
             .chain(),
     )
+    .add_systems(Update, billboard_foliage)
     .add_systems(
         Update,
         (
@@ -265,8 +273,8 @@ fn init_world(
 
     let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
     world.inner.retain_chunks(&loaded_set);
+    crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
     if cfg!(not(target_arch = "wasm32")) {
-        crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
         crate::chunk_gen::ensure_volcanoes_near(&mut world.inner, px, pz, 320);
     }
     for &(cx, cz) in &world.loaded_chunks.clone() {
