@@ -340,9 +340,21 @@
         btn.onclick = () => hideLoadingOverlay();
       }
 
+      function hideLoadingWhenTerrainReady() {
+        const api = window.wasmBindings;
+        const count = api && typeof api.nc_chunk_mesh_count === 'function'
+          ? api.nc_chunk_mesh_count()
+          : 0;
+        if (count > 0) {
+          hideLoadingOverlay();
+          document.body.classList.add('ready');
+          return true;
+        }
+        return false;
+      }
+
       window.addEventListener('TrunkApplicationStarted', () => {
-        hideLoadingOverlay();
-        document.body.classList.add('ready');
+        setLoadingStatus('Building world…');
       });
       window.addEventListener('unhandledrejection', (event) => {
         console.error('WASM load error', event.reason);
@@ -367,11 +379,9 @@
         }
       });
 
-      const wasmReadyPoll = setInterval(() => {
-        if (window.wasmBindings) {
-          hideLoadingOverlay();
-          document.body.classList.add('ready');
-          clearInterval(wasmReadyPoll);
+      const terrainReadyPoll = setInterval(() => {
+        if (hideLoadingWhenTerrainReady()) {
+          clearInterval(terrainReadyPoll);
         }
       }, 200);
 
@@ -379,6 +389,8 @@
         const elapsed = formatElapsed(Date.now() - loadStarted);
         if (!window.wasmBindings) {
           setLoadingStatus(`Compiling game engine… ${elapsed} (keep tab open, screen on)`);
+        } else if (!hideLoadingWhenTerrainReady()) {
+          setLoadingStatus(`Building world… ${elapsed}`);
         } else {
           clearInterval(elapsedPoll);
         }

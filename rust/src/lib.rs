@@ -101,10 +101,9 @@ pub fn run() {
         setup_fog,
         spawn_player,
         init_world,
-        bootstrap_player_meshes,
         init_mobile,
-        finish_wasm_startup,
-    ));
+    ))
+    .add_systems(PostStartup, bootstrap_player_meshes);
     #[cfg(not(target_arch = "wasm32"))]
     if !wasm {
         app.add_systems(Startup, (setup_sky, setup_clouds));
@@ -153,19 +152,61 @@ pub fn run() {
 
     #[cfg(target_arch = "wasm32")]
     {
-        app.add_systems(Update, dismiss_loading_screen_once);
+        app.add_systems(PostStartup, finish_wasm_startup);
     }
 
     app.run();
 }
 
 #[cfg(target_arch = "wasm32")]
-fn dismiss_loading_screen_once(mut dismissed: Local<bool>) {
-    if *dismissed {
-        return;
+pub(crate) mod wasm_entry {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use wasm_bindgen::prelude::*;
+
+    static CHUNK_MESH_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    pub(crate) fn set_chunk_mesh_count(count: usize) {
+        CHUNK_MESH_COUNT.store(count, Ordering::Relaxed);
     }
-    *dismissed = true;
-    wasm_entry::dismiss_loading_screen();
+
+    fn hide_loading_overlay() {
+        use wasm_bindgen::JsCast;
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Some(document) = window.document() else {
+            return;
+        };
+        let Some(element) = document.get_element_by_id("loading") else {
+            return;
+        };
+        if let Ok(html_element) = element.dyn_into::<web_sys::HtmlElement>() {
+            let _ = html_element.class_list().add_1("hidden");
+        }
+    }
+
+    pub(crate) fn dismiss_loading_screen() {
+        hide_loading_overlay();
+    }
+
+    pub(crate) fn hide_loading_overlay_if_ready(chunk_count: usize) {
+        if chunk_count > 0 {
+            hide_loading_overlay();
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn nc_chunk_mesh_count() -> usize {
+        CHUNK_MESH_COUNT.load(Ordering::Relaxed)
+    }
+
+    #[wasm_bindgen(start)]
+    pub fn wasm_start() {
+        console_error_panic_hook::set_once();
+        wasm_bindgen_futures::spawn_local(async {
+            super::run();
+        });
+    }
 }
 
 fn setup_scene(
@@ -229,59 +270,9 @@ fn init_world(
     }
 }
 
-fn finish_wasm_startup() {
-    #[cfg(target_arch = "wasm32")]
-    wasm_entry::dismiss_loading_screen();
-}
-
 #[cfg(target_arch = "wasm32")]
-pub(crate) mod wasm_entry {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use wasm_bindgen::prelude::*;
-
-    static CHUNK_MESH_COUNT: AtomicUsize = AtomicUsize::new(0);
-
-    pub(crate) fn set_chunk_mesh_count(count: usize) {
-        CHUNK_MESH_COUNT.store(count, Ordering::Relaxed);
-    }
-
-    fn hide_loading_overlay() {
-        use wasm_bindgen::JsCast;
-        let Some(window) = web_sys::window() else {
-            return;
-        };
-        let Some(document) = window.document() else {
-            return;
-        };
-        let Some(element) = document.get_element_by_id("loading") else {
-            return;
-        };
-        if let Ok(html_element) = element.dyn_into::<web_sys::HtmlElement>() {
-            let _ = html_element.class_list().add_1("hidden");
-        }
-    }
-
-    pub(crate) fn dismiss_loading_screen() {
-        hide_loading_overlay();
-    }
-
-    pub(crate) fn hide_loading_overlay_if_ready(chunk_count: usize) {
-        if chunk_count > 0 {
-            hide_loading_overlay();
-        }
-    }
-
-    #[wasm_bindgen]
-    pub fn nc_chunk_mesh_count() -> usize {
-        CHUNK_MESH_COUNT.load(Ordering::Relaxed)
-    }
-
-    #[wasm_bindgen(start)]
-    pub fn wasm_start() {
-        console_error_panic_hook::set_once();
-        dismiss_loading_screen();
-        wasm_bindgen_futures::spawn_local(async {
-            super::run();
-        });
+fn finish_wasm_startup(entity_map: Res<ChunkEntityMap>) {
+    if !entity_map.entities.is_empty() {
+        wasm_entry::dismiss_loading_screen();
     }
 }
