@@ -34,6 +34,8 @@ pub struct PlayerState {
     pub cursor_locked: bool,
     pub terrain_ready: bool,
     pub walk_bob_phase: f32,
+    /// 1.0 = start of pickaxe swing, decays to 0.
+    pub pickaxe_swing: f32,
 }
 
 impl Default for PlayerState {
@@ -50,6 +52,7 @@ impl Default for PlayerState {
             cursor_locked: false,
             terrain_ready: false,
             walk_bob_phase: 0.0,
+            pickaxe_swing: 0.0,
         }
     }
 }
@@ -372,7 +375,7 @@ pub fn raycast(world: &mut crate::world::VoxelWorld, origin: Vec3, direction: Ve
 
 pub fn block_interaction(
     mouse: Res<ButtonInput<MouseButton>>,
-    player: Res<PlayerState>,
+    mut player: ResMut<PlayerState>,
     mut world: ResMut<VoxelWorldResource>,
     mut inventory: ResMut<GameInventory>,
     mut queue: ResMut<RemeshQueue>,
@@ -391,6 +394,8 @@ pub fn block_interaction(
         if player.attack_cooldown >= 0.35 {
             return;
         }
+        player.pickaxe_swing = 1.0;
+        player.attack_cooldown = 0.35;
         if let Some(hit) = raycast(&mut world.inner, origin, direction, 6.0) {
             let block = world.inner.get_block(hit.block.x, hit.block.y, hit.block.z);
             if block != BlockId::Bedrock && block != BlockId::Lava {

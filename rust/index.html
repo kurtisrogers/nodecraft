@@ -406,56 +406,40 @@
       transition: opacity 0.15s;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 6px;
+      align-items: flex-end;
+      gap: 4px;
     }
     body.playing:not(.menu-pause):not(.menu-inventory) #nav-hud {
       opacity: 1;
     }
-    #nav-compass {
-      position: relative;
-      width: 120px;
-      height: 48px;
-      border-radius: 8px;
-      background: rgba(8, 12, 20, 0.72);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      overflow: hidden;
+    #minimap-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: rgba(200, 230, 255, 0.95);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
     }
-    #nav-compass canvas {
-      display: block;
-      width: 120px;
-      height: 48px;
-    }
-    #nav-compass-label {
-      position: absolute;
-      left: 4px;
-      right: 4px;
-      bottom: 3px;
-      font-size: 9px;
-      line-height: 1.2;
-      color: rgba(235, 235, 245, 0.95);
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-      max-width: 112px;
-      white-space: normal;
+    #minimap-frame {
+      padding: 4px;
+      border-radius: 10px;
+      background: rgba(8, 12, 20, 0.88);
+      border: 2px solid rgba(100, 180, 255, 0.85);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
     }
     #minimap-canvas {
-      width: 128px;
-      height: 128px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(8, 12, 20, 0.72);
+      display: block;
+      width: 168px;
+      height: 168px;
+      border-radius: 6px;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     #minimap-legend {
       font-size: 9px;
       line-height: 1.3;
-      color: rgba(190, 195, 210, 0.92);
-      text-align: center;
-      max-width: 128px;
-    }
-    #minimap-north {
-      display: none;
+      color: rgba(170, 180, 200, 0.95);
+      text-align: right;
+      max-width: 180px;
     }
   </style>
   <link data-trunk rel="rust" href="Cargo.toml" data-wasm-opt="z" />
@@ -474,12 +458,11 @@
   <div id="crosshair" aria-hidden="true"></div>
 
   <div id="nav-hud" aria-hidden="true">
-    <div id="nav-compass">
-      <canvas id="nav-compass-canvas" width="120" height="48"></canvas>
-      <div id="nav-compass-label">Scanning…</div>
+    <div id="minimap-title">MAP</div>
+    <div id="minimap-frame">
+      <canvas id="minimap-canvas" width="80" height="80"></canvas>
     </div>
-    <canvas id="minimap-canvas" width="64" height="64"></canvas>
-    <div id="minimap-legend">▲ north · cyan = you · gold = village · red = enemies</div>
+    <div id="minimap-legend">▲ ahead · gold village · red enemy · pink animal</div>
   </div>
 
   <div id="pause-overlay" hidden>
@@ -695,91 +678,15 @@
         });
       }
 
-      window.ncUpdateNavHud = function(
-        playerYaw,
-        villageDist,
-        villageBearing,
-        villageActive,
-        villageDiscovered,
-        volcanoDist,
-        volcanoBearing,
-        volcanoActive,
-        hint,
-        mobCsv,
-        rgba
-      ) {
+      window.ncUpdateMinimap = function(rgba) {
         const minimap = document.getElementById('minimap-canvas');
-        const mapSize = 64;
-        if (minimap) {
-          const ctx = minimap.getContext('2d');
-          if (ctx && rgba && rgba.length >= mapSize * mapSize * 4) {
-            const image = ctx.createImageData(mapSize, mapSize);
-            image.data.set(new Uint8ClampedArray(rgba));
-            ctx.putImageData(image, 0, 0);
-            const cx = mapSize / 2;
-            const cy = mapSize / 2;
-            ctx.strokeStyle = 'rgba(80, 220, 255, 0.95)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(cx - 4, cy);
-            ctx.lineTo(cx + 4, cy);
-            ctx.moveTo(cx, cy - 4);
-            ctx.lineTo(cx, cy + 4);
-            ctx.stroke();
-          }
-        }
-
-        const legend = document.getElementById('minimap-legend');
-        if (legend) {
-          legend.textContent = '▲ north · cyan = you · gold = village · pink = animals · red = enemies';
-        }
-
-        const compass = document.getElementById('nav-compass-canvas');
-        const label = document.getElementById('nav-compass-label');
-        if (!compass) return;
-        const c = compass.getContext('2d');
-        if (!c) return;
-        c.clearRect(0, 0, compass.width, compass.height);
-        const cx = compass.width * 0.5;
-        const cy = compass.height * 0.5;
-        const radius = 18;
-        c.strokeStyle = 'rgba(220, 220, 230, 0.75)';
-        c.lineWidth = 1.5;
-        c.beginPath();
-        c.arc(cx, cy, radius, 0, Math.PI * 2);
-        c.stroke();
-        c.fillStyle = 'rgba(200, 200, 210, 0.9)';
-        c.font = '10px system-ui,sans-serif';
-        c.textAlign = 'center';
-        c.fillText('N', cx, 11);
-        c.fillStyle = 'rgba(80, 220, 255, 0.95)';
-        c.beginPath();
-        c.arc(cx, cy, 3, 0, Math.PI * 2);
-        c.fill();
-
-        if (label && hint) {
-          label.textContent = hint;
-        }
-
-        if (villageActive) {
-          const x = Math.sin(villageBearing) * radius * 0.82;
-          const y = -Math.cos(villageBearing) * radius * 0.82;
-          c.strokeStyle = villageDiscovered ? 'rgba(255, 210, 80, 0.98)' : 'rgba(255, 210, 80, 0.45)';
-          c.lineWidth = 3;
-          c.beginPath();
-          c.moveTo(cx + x * 0.15, cy + y * 0.15);
-          c.lineTo(cx + x, cy + y);
-          c.stroke();
-        }
-
-        if (volcanoActive) {
-          const x = Math.sin(volcanoBearing) * radius * 0.62;
-          const y = -Math.cos(volcanoBearing) * radius * 0.62;
-          c.fillStyle = 'rgba(255, 100, 70, 0.95)';
-          c.beginPath();
-          c.arc(cx + x, cy + y, 3.5, 0, Math.PI * 2);
-          c.fill();
-        }
+        const mapSize = 80;
+        if (!minimap) return;
+        const ctx = minimap.getContext('2d');
+        if (!ctx || !rgba || rgba.length < mapSize * mapSize * 4) return;
+        const image = ctx.createImageData(mapSize, mapSize);
+        image.data.set(new Uint8ClampedArray(rgba));
+        ctx.putImageData(image, 0, 0);
       };
 
       window.ncUpdateGameUi = function(screen, hotbarIndex, pickedSlot, slotsCsv) {
