@@ -31,7 +31,7 @@ fn spawn_interval() -> f32 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MobType {
     Pig,
     Cow,
@@ -88,7 +88,7 @@ impl MobType {
         }
     }
 
-    fn aabb(self) -> Aabb {
+    pub(crate) fn aabb(self) -> Aabb {
         let size = self.size();
         Aabb::new(size.x * 0.5, size.z * 0.5, size.y)
     }
@@ -120,7 +120,7 @@ pub fn mob_spawner(
     mut world: ResMut<VoxelWorldResource>,
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    assets: Res<crate::mob_models::MobModelAssets>,
     existing: Query<&MobEntity>,
 ) {
     manager.count = existing.iter().filter(|m| m.alive).count();
@@ -167,7 +167,7 @@ pub fn mob_spawner(
         &mut commands,
         &mut manager,
         &mut materials,
-        &mut meshes,
+        &assets,
         kind,
         Vec3::new(spawn.0, spawn.1, spawn.2),
     );
@@ -177,31 +177,19 @@ fn spawn_mob(
     commands: &mut Commands,
     manager: &mut MobManager,
     materials: &mut Assets<StandardMaterial>,
-    meshes: &mut Assets<Mesh>,
+    assets: &crate::mob_models::MobModelAssets,
     kind: MobType,
     position: Vec3,
 ) {
     manager.next_id += 1;
-    let size = kind.size();
-    let mat = materials.add(StandardMaterial {
-        base_color: kind.color(),
-        perceptual_roughness: 1.0,
-        ..default()
-    });
-
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::from_size(size))),
-        MeshMaterial3d(mat),
-        Transform::from_translation(position + Vec3::Y * size.y * 0.5),
-        MobEntity {
-            kind,
-            health: kind.health(),
-            velocity: Vec3::ZERO,
-            wander_timer: 2.0,
-            wander_dir: Vec3::Z,
-            alive: true,
-        },
-    ));
+    crate::mob_models::spawn_mob_model(
+        commands,
+        assets,
+        materials,
+        kind,
+        position,
+        kind.health(),
+    );
 }
 
 fn pick_spawn_type(is_night: bool, rng: &mut impl Rng) -> MobType {
@@ -287,6 +275,10 @@ pub fn mob_ai(
 
         if move_dir.length_squared() > 0.01 {
             transform.rotation = Quat::from_rotation_y(move_dir.x.atan2(move_dir.z));
+            let bob = (time.elapsed_secs() * kind.speed() * 3.0).sin() * 0.04;
+            transform.scale = Vec3::new(1.0, 1.0 + bob, 1.0);
+        } else {
+            transform.scale = Vec3::ONE;
         }
     }
 }

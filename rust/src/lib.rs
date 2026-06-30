@@ -5,14 +5,18 @@ mod chunk_gen;
 mod collision;
 mod config;
 mod decorations;
+mod effects;
 mod menu;
 mod inventory;
 mod meshing;
 mod mobile;
+mod mob_models;
 mod mobs;
 mod nav;
 mod noise;
 mod player;
+mod player_body;
+mod proc_mesh;
 mod clouds;
 mod sky;
 mod structures;
@@ -51,11 +55,16 @@ use player::{
 use ui::{setup_fog, update_fps, HudState};
 #[cfg(not(target_arch = "wasm32"))]
 use ui::draw_hud;
-use weather::{MoonLight, SunLight, update_day_night, update_lights};
+use weather::{MoonLight, SunLight, update_chunk_material_lighting, update_day_night, update_lights};
 use inventory::GameInventory;
 use clouds::{setup_clouds, update_clouds};
 use decorations::{billboard_foliage, setup_decorations};
+use effects::{
+    scatter_wild_lanterns, setup_effects, sync_lanterns, sync_volcano_smoke, update_smoke,
+};
 use fp_view::{setup_fp_view, update_fp_view};
+use mob_models::setup_mob_models;
+use player_body::{setup_player_body, update_player_body};
 use sky::{setup_sky, update_sky};
 
 pub fn run() {
@@ -119,7 +128,13 @@ pub fn run() {
         init_world,
         init_mobile,
     ))
-    .add_systems(PostStartup, (bootstrap_player_meshes, setup_fp_view));
+    .add_systems(PostStartup, (
+        bootstrap_player_meshes,
+        setup_fp_view,
+        setup_player_body,
+        setup_mob_models,
+        setup_effects,
+    ));
     app.add_systems(Startup, (setup_clouds, setup_sky));
     app
     .add_systems(
@@ -143,6 +158,7 @@ pub fn run() {
             sync_html_ui,
             process_restart,
             update_fp_view,
+            update_player_body,
         )
             .chain(),
     )
@@ -155,12 +171,22 @@ pub fn run() {
             update_terrain_ready,
             update_day_night,
             update_lights,
+            update_chunk_material_lighting,
             update_fps,
             update_nav_hud,
         ),
     );
     app.add_systems(Update, update_clouds);
     app.add_systems(Update, update_sky.after(update_lights));
+    app.add_systems(
+        Update,
+        (
+            sync_volcano_smoke,
+            update_smoke,
+            sync_lanterns,
+            scatter_wild_lanterns,
+        ),
+    );
     app.add_systems(Update, (mob_spawner, mob_ai));
     if !wasm {
         #[cfg(not(target_arch = "wasm32"))]
@@ -253,7 +279,9 @@ fn setup_scene(
         Transform::from_rotation(Quat::from_rotation_x(std::f32::consts::PI)),
     ));
 
-    let mat = materials.add(VoxelChunkMaterial {});
+    let mat = materials.add(VoxelChunkMaterial {
+        sun_dir: Vec4::new(0.3, 0.85, 0.4, 1.0),
+    });
     commands.insert_resource(ChunkMaterial(mat));
 }
 
@@ -280,9 +308,8 @@ fn init_world(
     let loaded_set: std::collections::HashSet<_> = world.loaded_chunks.iter().copied().collect();
     world.inner.retain_chunks(&loaded_set);
     crate::chunk_gen::ensure_settlements_near(&mut world.inner, px, pz, 320);
-    if cfg!(not(target_arch = "wasm32")) {
-        crate::chunk_gen::ensure_volcanoes_near(&mut world.inner, px, pz, 320);
-    }
+    crate::chunk_gen::ensure_volcanoes_near(&mut world.inner, px, pz, 320);
+    crate::chunk_gen::ensure_starter_volcano(&mut world.inner, px, pz);
     for &(cx, cz) in &world.loaded_chunks.clone() {
         queue.push((cx, cz));
     }

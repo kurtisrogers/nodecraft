@@ -5,12 +5,12 @@ use bevy::render::render_asset::RenderAssetUsages;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
-const CLOUD_COUNT: usize = 10;
-const WASM_CLOUD_COUNT: usize = 6;
+const CLOUD_COUNT: usize = 24;
+const WASM_CLOUD_COUNT: usize = 12;
 const CLOUD_VARIANTS: usize = 3;
 const CLOUD_HEIGHT_MIN: f32 = 68.0;
 const CLOUD_HEIGHT_MAX: f32 = 96.0;
-const CLOUD_SPREAD: f32 = 110.0;
+const CLOUD_SPREAD: f32 = 165.0;
 const CLOUD_UPDATE_INTERVAL: u32 = 2;
 
 #[derive(Component)]
@@ -35,19 +35,19 @@ fn cloud_profile() -> CloudProfile {
     if cfg!(target_arch = "wasm32") {
         CloudProfile {
             count: WASM_CLOUD_COUNT,
-            width: 5,
+            width: 6,
             height: 3,
-            depth: 5,
+            depth: 6,
             top_faces_only: true,
             alpha_mode: AlphaMode::Mask(0.45),
         }
     } else {
         CloudProfile {
             count: CLOUD_COUNT,
-            width: 7,
-            height: 4,
-            depth: 7,
-            top_faces_only: true,
+            width: 8,
+            height: 5,
+            depth: 8,
+            top_faces_only: false,
             alpha_mode: AlphaMode::Blend,
         }
     }

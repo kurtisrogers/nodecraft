@@ -73,7 +73,7 @@ pub fn ensure_volcanoes_near(world: &mut VoxelWorld, world_x: i32, world_z: i32,
             if world.placed_volcanoes.contains(&key) {
                 continue;
             }
-            if world.noise.volcano_cell_score(cell_x, cell_z) < 0.24 {
+            if world.noise.volcano_cell_score(cell_x, cell_z) < 0.18 {
                 continue;
             }
             let center_x = cell_x * GRID + GRID / 2;
@@ -105,6 +105,59 @@ pub fn ensure_volcanoes_near(world: &mut VoxelWorld, world_x: i32, world_z: i32,
         world.placed_volcanoes.insert((cell_x, cell_z));
         mark_feature_dirty(world, center_x, center_z, 3);
     }
+}
+
+/// Place at least one volcano within exploration range of spawn.
+pub fn ensure_starter_volcano(world: &mut VoxelWorld, near_x: i32, near_z: i32) {
+    const GRID: i32 = 384;
+    const MIN_DIST: i32 = 220;
+    const MAX_DIST: i32 = 520;
+
+    for &(cx, cz) in &world.volcano_centers {
+        let dx = cx - near_x;
+        let dz = cz - near_z;
+        if (dx * dx + dz * dz) as f32 <= (MAX_DIST * MAX_DIST) as f32 {
+            return;
+        }
+    }
+
+    let base_cell_x = near_x.div_euclid(GRID);
+    let base_cell_z = near_z.div_euclid(GRID);
+
+    let mut best: Option<(i32, i32, i32, i32, f32)> = None;
+    for cell_x in (base_cell_x - 1)..=(base_cell_x + 1) {
+        for cell_z in (base_cell_z - 1)..=(base_cell_z + 1) {
+            let key = (cell_x, cell_z);
+            if world.placed_volcanoes.contains(&key) {
+                continue;
+            }
+            let score = world.noise.volcano_cell_score(cell_x, cell_z);
+            let center_x = cell_x * GRID + GRID / 2;
+            let center_z = cell_z * GRID + GRID / 2;
+            let dist = (((center_x - near_x).pow(2) + (center_z - near_z).pow(2)) as f32).sqrt();
+            if dist < MIN_DIST as f32 || dist > MAX_DIST as f32 {
+                continue;
+            }
+            if !world.noise.is_land(center_x, center_z) {
+                continue;
+            }
+            if world.noise.settlement_at(center_x, center_z) > 0.25 {
+                continue;
+            }
+            if best.map(|(_, _, _, _, s)| score > s).unwrap_or(true) {
+                best = Some((center_x, center_z, cell_x, cell_z, score));
+            }
+        }
+    }
+
+    let Some((center_x, center_z, cell_x, cell_z, _)) = best else {
+        return;
+    };
+    world.load_chunks_around(center_x, center_z);
+    place_volcano(world, center_x, center_z);
+    world.volcano_centers.push((center_x, center_z));
+    world.placed_volcanoes.insert((cell_x, cell_z));
+    mark_feature_dirty(world, center_x, center_z, 4);
 }
 
 fn mark_feature_dirty(world: &mut VoxelWorld, center_x: i32, center_z: i32, chunk_ring: i32) {

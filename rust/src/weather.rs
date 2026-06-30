@@ -128,8 +128,8 @@ pub fn update_lights(
         transform.rotation = Quat::from_rotation_x(state.moon_angle);
     }
 
-    let day_ambient = 120.0 + state.daylight * 620.0;
-    let night_ambient = state.moonlight * 320.0;
+    let day_ambient = 180.0 + state.daylight * 680.0;
+    let night_ambient = 140.0 + state.moonlight * 380.0;
     let mut brightness = day_ambient + night_ambient;
     if cfg!(target_arch = "wasm32") {
         // Keep nights readable on mobile without washing out stars/sky.
@@ -142,6 +142,22 @@ pub fn update_lights(
         0.54 + state.daylight * 0.20 + state.moonlight * 0.10,
         0.72 + state.daylight * 0.08 + state.moonlight * 0.26,
     );
+}
+
+pub fn update_chunk_material_lighting(
+    day: Res<DayNight>,
+    chunk_mat: Res<crate::meshing::ChunkMaterial>,
+    mut materials: ResMut<Assets<crate::chunk_material::VoxelChunkMaterial>>,
+) {
+    let state = celestial_state(&day);
+    if let Some(mat) = materials.get_mut(&chunk_mat.0) {
+        mat.sun_dir = Vec4::new(
+            state.sun_forward.x,
+            state.sun_forward.y,
+            state.sun_forward.z,
+            state.daylight,
+        );
+    }
 }
 
 #[cfg(test)]
