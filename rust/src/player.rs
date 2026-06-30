@@ -140,6 +140,13 @@ pub fn lock_cursor(
     }
 }
 
+/// Ignore tiny horizontal jitter while the player is mostly looking up/down.
+fn should_apply_horizontal_look(horizontal: f32, vertical: f32) -> bool {
+    let h = horizontal.abs();
+    let v = vertical.abs();
+    h > 0.0 && (v < 0.5 || h * 2.0 >= v)
+}
+
 pub fn mouse_look(
     mut motion: EventReader<MouseMotion>,
     mut player: ResMut<PlayerState>,
@@ -156,11 +163,17 @@ pub fn mouse_look(
         delta += ev.delta;
     }
     if mobile.look_delta != Vec2::ZERO {
-        player.yaw += mobile.look_delta.x;
-        player.pitch -= mobile.look_delta.y;
+        let h = mobile.look_delta.x;
+        let v = mobile.look_delta.y;
+        if should_apply_horizontal_look(h, v) {
+            player.yaw += h;
+        }
+        player.pitch -= v;
     }
     if delta != Vec2::ZERO {
-        player.yaw -= delta.x * MOUSE_SENSITIVITY;
+        if should_apply_horizontal_look(delta.x, delta.y) {
+            player.yaw -= delta.x * MOUSE_SENSITIVITY;
+        }
         player.pitch -= delta.y * MOUSE_SENSITIVITY;
     }
     player.pitch = player.pitch.clamp(-1.55, 1.55);
