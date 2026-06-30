@@ -64,6 +64,10 @@ impl MobType {
         matches!(self, Self::Zombie)
     }
 
+    pub fn is_hostile(self) -> bool {
+        self.hostile()
+    }
+
     fn color(self) -> Color {
         match self {
             Self::Pig => Color::srgb(1.0, 0.71, 0.76),

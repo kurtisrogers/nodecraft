@@ -13,6 +13,9 @@ pub struct VoxelWorld {
     pub placed_volcanoes: std::collections::HashSet<(i32, i32)>,
     /// Farm plots that should get wheat billboard sprites (origin_x, origin_y, origin_z, size).
     pub wheat_patches: Vec<(i32, i32, i32, i32)>,
+    /// World coordinates of generated village centers (for navigation).
+    pub settlement_centers: Vec<(i32, i32)>,
+    pub volcano_centers: Vec<(i32, i32)>,
     pub render_distance: i32,
 }
 
@@ -26,6 +29,8 @@ impl VoxelWorld {
             placed_settlements: std::collections::HashSet::new(),
             placed_volcanoes: std::collections::HashSet::new(),
             wheat_patches: Vec::new(),
+            settlement_centers: Vec::new(),
+            volcano_centers: Vec::new(),
             render_distance: RENDER_DISTANCE,
         }
     }

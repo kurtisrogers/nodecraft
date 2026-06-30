@@ -358,7 +358,7 @@ pub fn sync_chunk_meshes(
 
         sync_chunk_decorations(
             &mut commands,
-            &world.inner,
+            &mut world.inner,
             &foliage_assets,
             &mut foliage_map,
             cx,

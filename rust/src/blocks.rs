@@ -57,7 +57,7 @@ impl BlockId {
     /// Blocks that impede player movement (full cubes only).
     pub fn blocks_collision(self) -> bool {
         match self {
-            Self::TallGrass | Self::Flower | Self::Wheat | Self::Leaves => false,
+            Self::TallGrass | Self::Flower | Self::Wheat | Self::Leaves | Self::Glass => false,
             _ => self.solid(),
         }
     }

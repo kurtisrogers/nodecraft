@@ -1,5 +1,5 @@
 use crate::blocks::BlockId;
-use crate::chunk_gen::get_block_local;
+use crate::chunk_gen::{get_block_local, set_block_local};
 use crate::config::{CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT};
 use crate::world::VoxelWorld;
 use bevy::prelude::*;
@@ -42,25 +42,25 @@ pub fn setup_decorations(
     commands.insert_resource(FoliageAssets {
         quad: meshes.add(build_foliage_quad()),
         grass: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.32, 0.68, 0.24, 0.92),
-            emissive: LinearRgba::new(0.12, 0.28, 0.08, 1.0),
-            alpha_mode: AlphaMode::Mask(0.35),
+            base_color: Color::srgba(0.32, 0.68, 0.24, 0.75),
+            emissive: LinearRgba::new(0.08, 0.18, 0.05, 1.0),
+            alpha_mode: AlphaMode::Mask(0.45),
             unlit: true,
             cull_mode: None,
             ..default()
         }),
         flower: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.98, 0.82, 0.22, 0.95),
-            emissive: LinearRgba::new(0.25, 0.18, 0.05, 1.0),
-            alpha_mode: AlphaMode::Mask(0.4),
+            base_color: Color::srgba(0.98, 0.82, 0.22, 0.8),
+            emissive: LinearRgba::new(0.15, 0.12, 0.03, 1.0),
+            alpha_mode: AlphaMode::Mask(0.5),
             unlit: true,
             cull_mode: None,
             ..default()
         }),
         wheat: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.82, 0.72, 0.22, 0.95),
-            emissive: LinearRgba::new(0.15, 0.12, 0.03, 1.0),
-            alpha_mode: AlphaMode::Mask(0.4),
+            base_color: Color::srgba(0.82, 0.72, 0.22, 0.85),
+            emissive: LinearRgba::new(0.1, 0.08, 0.02, 1.0),
+            alpha_mode: AlphaMode::Mask(0.5),
             unlit: true,
             cull_mode: None,
             ..default()
@@ -70,8 +70,8 @@ pub fn setup_decorations(
 }
 
 fn build_foliage_quad() -> Mesh {
-    let w = 0.5;
-    let h = 0.85;
+    let w = 0.22;
+    let h = 0.38;
     let mut positions: Vec<[f32; 3]> = Vec::new();
     let mut normals: Vec<[f32; 3]> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
@@ -101,12 +101,13 @@ fn build_foliage_quad() -> Mesh {
 
 pub fn sync_chunk_decorations(
     commands: &mut Commands,
-    world: &VoxelWorld,
+    world: &mut VoxelWorld,
     assets: &FoliageAssets,
     map: &mut FoliageChunkMap,
     chunk_x: i32,
     chunk_z: i32,
 ) {
+    purge_voxel_foliage_in_chunk(world, chunk_x, chunk_z);
     if let Some(old) = map.entities.remove(&(chunk_x, chunk_z)) {
         for entity in old {
             commands.entity(entity).despawn();
@@ -155,9 +156,9 @@ pub fn sync_chunk_decorations(
             let Some(kind) = kind else { continue };
 
             let (mat, scale, y_offset) = match kind {
-                FoliageKind::Grass => (&assets.grass, rng.gen_range(0.75..1.1), 0.0),
-                FoliageKind::Flower => (&assets.flower, rng.gen_range(0.65..0.95), 0.0),
-                FoliageKind::Wheat => (&assets.wheat, rng.gen_range(0.8..1.05), 0.0),
+                FoliageKind::Grass => (&assets.grass, rng.gen_range(0.55..0.8), 0.02),
+                FoliageKind::Flower => (&assets.flower, rng.gen_range(0.5..0.75), 0.02),
+                FoliageKind::Wheat => (&assets.wheat, rng.gen_range(0.6..0.85), 0.02),
             };
             let yaw = rng.gen_range(0.0..std::f32::consts::TAU);
             let pos = Vec3::new(
@@ -189,6 +190,36 @@ pub fn sync_chunk_decorations(
         chunk_x,
         chunk_z,
     );
+}
+
+fn purge_voxel_foliage_in_chunk(world: &mut VoxelWorld, chunk_x: i32, chunk_z: i32) {
+    let Some(chunk) = world.chunks.get_mut(&(chunk_x, chunk_z)) else {
+        return;
+    };
+    let mut changed = false;
+    for lx in 0..CHUNK_SIZE {
+        for lz in 0..CHUNK_SIZE {
+            for ly in 0..WORLD_HEIGHT {
+                let block = get_block_local(&chunk.blocks, lx, ly, lz);
+                if block.is_cross_decoration() {
+                    set_block_local(
+                        &mut chunk.blocks,
+                        lx,
+                        ly,
+                        lz,
+                        BlockId::Air,
+                    );
+                    let wx = chunk_x * CHUNK_SIZE + lx;
+                    let wz = chunk_z * CHUNK_SIZE + lz;
+                    world.modifications.insert((wx, ly, wz), BlockId::Air);
+                    changed = true;
+                }
+            }
+        }
+    }
+    if changed {
+        chunk.dirty = true;
+    }
 }
 
 fn sync_wheat_patches_in_chunk(
