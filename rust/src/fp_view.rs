@@ -1,8 +1,12 @@
 use crate::menu::{is_playing, GameUiState};
-use crate::player::PlayerCamera;
+use crate::player::{PlayerCamera, PlayerState};
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
+
+const PICKAXE_REST: Vec3 = Vec3::new(0.42, -0.28, -0.55);
+const PICKAXE_REST_ROT: Vec3 = Vec3::new(-0.5, 0.85, 0.15);
+const PICKAXE_SCALE: Vec3 = Vec3::splat(0.14);
 
 #[derive(Component)]
 pub struct FirstPersonPickaxe;
@@ -57,9 +61,14 @@ pub fn setup_fp_view(
         parent.spawn((
             Mesh3d(pickaxe),
             MeshMaterial3d(wood),
-            Transform::from_xyz(0.42, -0.28, -0.55)
-                .with_rotation(Quat::from_euler(EulerRot::ZYX, -0.5, 0.85, 0.15))
-                .with_scale(Vec3::new(0.14, 0.14, 0.14)),
+            Transform::from_translation(PICKAXE_REST)
+                .with_rotation(Quat::from_euler(
+                    EulerRot::ZYX,
+                    PICKAXE_REST_ROT.x,
+                    PICKAXE_REST_ROT.y,
+                    PICKAXE_REST_ROT.z,
+                ))
+                .with_scale(PICKAXE_SCALE),
             FirstPersonPickaxe,
         ));
     });
@@ -169,8 +178,11 @@ fn add_box(
 }
 
 pub fn update_fp_view(
+    time: Res<Time>,
     ui: Res<GameUiState>,
+    mut player: ResMut<PlayerState>,
     mut parts: Query<&mut Visibility, Or<(With<FirstPersonPickaxe>, With<FirstPersonArm>)>>,
+    mut pickaxe: Query<&mut Transform, With<FirstPersonPickaxe>>,
 ) {
     let show = is_playing(&ui);
     for mut vis in parts.iter_mut() {
@@ -179,5 +191,32 @@ pub fn update_fp_view(
         } else {
             Visibility::Hidden
         };
+    }
+
+    if !show {
+        return;
+    }
+
+    let dt = time.delta_secs();
+    player.pickaxe_swing = (player.pickaxe_swing - dt * 3.2).max(0.0);
+    let swing = player.pickaxe_swing;
+    let arc = if swing > 0.0 {
+        (swing * std::f32::consts::PI).sin()
+    } else {
+        0.0
+    };
+
+    if let Ok(mut transform) = pickaxe.get_single_mut() {
+        let swing_rot = Quat::from_euler(EulerRot::ZYX, -arc * 1.35, arc * 0.25, arc * 0.4);
+        let rest_rot = Quat::from_euler(
+            EulerRot::ZYX,
+            PICKAXE_REST_ROT.x,
+            PICKAXE_REST_ROT.y,
+            PICKAXE_REST_ROT.z,
+        );
+        let lunge = Vec3::new(arc * 0.06, -arc * 0.04, -arc * 0.14);
+        *transform = Transform::from_translation(PICKAXE_REST + lunge)
+            .with_rotation(rest_rot * swing_rot)
+            .with_scale(PICKAXE_SCALE);
     }
 }

@@ -330,6 +330,7 @@ pub fn mob_attack_interaction(
 
     if let Some((entity, _)) = best {
         player.attack_cooldown = 0.4;
+        player.pickaxe_swing = 1.0;
         if let Ok((_, mut mob, _)) = mobs.get_mut(entity) {
             mob.health -= ATTACK_DAMAGE;
             if mob.health <= 0 {
