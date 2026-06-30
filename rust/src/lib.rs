@@ -28,6 +28,7 @@ mod fp_view;
 
 use bevy::prelude::*;
 use bevy::window::PresentMode;
+use bevy::render::view::RenderLayers;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy_egui::EguiPlugin;
 use chunk_material::{VoxelChunkMaterial, VoxelChunkMaterialPlugin};
@@ -267,6 +268,7 @@ fn setup_scene(
             ..default()
         },
         SunLight,
+        RenderLayers::from_layers(&[0, 1]),
         Transform::from_xyz(50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
     commands.spawn((

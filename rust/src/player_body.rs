@@ -2,6 +2,12 @@ use crate::menu::{is_playing, GameUiState};
 use crate::player::PlayerState;
 use crate::proc_mesh::box_mesh;
 use bevy::prelude::*;
+use bevy::render::view::RenderLayers;
+
+/// World meshes (terrain, mobs, etc.) — default layer 0.
+pub const WORLD_RENDER_LAYER: RenderLayers = RenderLayers::layer(0);
+/// Player body is drawn on layer 1 so the first-person camera (layer 0) does not see it.
+pub const PLAYER_BODY_RENDER_LAYER: RenderLayers = RenderLayers::layer(1);
 
 #[derive(Component)]
 pub struct PlayerBody;
@@ -92,6 +98,7 @@ pub fn setup_player_body(
                 Mesh3d(torso_mesh),
                 MeshMaterial3d(shirt.clone()),
                 Transform::from_xyz(0.0, 0.9, 0.0),
+                PLAYER_BODY_RENDER_LAYER,
                 PlayerLimb {
                     side: LimbSide::Center,
                     kind: LimbKind::Torso,
@@ -101,6 +108,7 @@ pub fn setup_player_body(
                 Mesh3d(head_mesh),
                 MeshMaterial3d(skin.clone()),
                 Transform::from_xyz(0.0, 1.55, 0.0),
+                PLAYER_BODY_RENDER_LAYER,
                 PlayerLimb {
                     side: LimbSide::Center,
                     kind: LimbKind::Head,
@@ -111,6 +119,7 @@ pub fn setup_player_body(
                     Mesh3d(limb_mesh.clone()),
                     MeshMaterial3d(shirt.clone()),
                     Transform::from_xyz(x, 1.35, 0.0),
+                    PLAYER_BODY_RENDER_LAYER,
                     PlayerLimb {
                         side,
                         kind: LimbKind::Arm,
@@ -122,6 +131,7 @@ pub fn setup_player_body(
                     Mesh3d(limb_mesh.clone()),
                     MeshMaterial3d(pants.clone()),
                     Transform::from_xyz(x, 0.6, 0.0),
+                    PLAYER_BODY_RENDER_LAYER,
                     PlayerLimb {
                         side,
                         kind: LimbKind::Leg,
