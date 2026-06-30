@@ -241,14 +241,15 @@ fn block_distance(ax: i32, az: i32, bx: i32, bz: i32) -> f32 {
 }
 
 /// Map world offset to screen pixel (heading-up: forward = top of map).
+/// Matches player forward `(-sin(yaw), -cos(yaw))` and right `(cos(yaw), -sin(yaw))`.
 fn world_offset_to_map(dx: f32, dz: f32, yaw: f32, half: i32) -> (i32, i32) {
     let cos_yaw = yaw.cos();
     let sin_yaw = yaw.sin();
-    let right = dx * cos_yaw + dz * sin_yaw;
-    let forward = -dx * sin_yaw - dz * cos_yaw;
+    let right = dx * cos_yaw - dz * sin_yaw;
+    let ahead = -dx * sin_yaw - dz * cos_yaw;
     (
         (half as f32 + right).round() as i32,
-        (half as f32 - forward).round() as i32,
+        (half as f32 - ahead).round() as i32,
     )
 }
 
@@ -274,12 +275,12 @@ pub fn build_minimap(
     for py in 0..size {
         for px in 0..size {
             let right = (px - half) as f32;
-            let forward = (half - py) as f32;
-            if right * right + forward * forward > radius_sq {
+            let ahead = (half - py) as f32;
+            if right * right + ahead * ahead > radius_sq {
                 continue;
             }
-            let dx = right * cos_yaw - forward * sin_yaw;
-            let dz = right * sin_yaw + forward * cos_yaw;
+            let dx = right * cos_yaw - ahead * sin_yaw;
+            let dz = right * sin_yaw - ahead * cos_yaw;
             let wx = player_x + dx.round() as i32;
             let wz = player_z + dz.round() as i32;
             let idx = ((py * size + px) * 4) as usize;
@@ -516,6 +517,32 @@ mod tests {
     fn heading_up_places_forward_at_top() {
         let (mx, mz) = world_offset_to_map(0.0, -10.0, 0.0, 40);
         assert_eq!(mx, 40);
-        assert!(mz < 40, "north should map above center");
+        assert!(mz < 40, "ahead should map above center");
+    }
+
+    #[test]
+    fn heading_up_matches_player_forward_at_yaw_zero() {
+        // Player forward at yaw=0 is -Z; walking forward decreases z.
+        let (mx, mz) = world_offset_to_map(0.0, -20.0, 0.0, 40);
+        assert_eq!(mx, 40, "dead ahead stays centered");
+        assert_eq!(mz, 20, "ahead should be toward top of map");
+    }
+
+    #[test]
+    fn map_pixel_round_trips_world_offset() {
+        let half = 40;
+        for (dx, dz) in [(0, -20), (15, 0), (-8, 12)] {
+            let (mx, mz) = world_offset_to_map(dx as f32, dz as f32, 0.0, half);
+            let right = mx - half;
+            let ahead = half - mz;
+            assert_eq!(right, dx, "right axis at yaw 0");
+            assert_eq!(ahead, -dz, "ahead axis at yaw 0");
+            let rdx = right as f32;
+            let rad = ahead as f32;
+            let wx = rdx.round() as i32;
+            let wz = -rad.round() as i32;
+            assert_eq!(wx, dx);
+            assert_eq!(wz, dz);
+        }
     }
 }
