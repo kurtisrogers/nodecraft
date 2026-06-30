@@ -8,6 +8,7 @@ use crate::inventory::GameInventory;
 use crate::menu::GameUiState;
 use crate::meshing::{ChunkMesh, RemeshQueue, VoxelWorldResource};
 use crate::mobile::{is_controlling, MobileInput};
+use crate::player_body::WORLD_RENDER_LAYER;
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
@@ -90,6 +91,7 @@ pub fn spawn_player(
         Transform::from_translation(player.position + Vec3::Y * EYE_HEIGHT)
             .with_rotation(Quat::from_euler(EulerRot::YXZ, player.yaw, player.pitch, 0.0)),
         PlayerCamera,
+        WORLD_RENDER_LAYER,
     ));
     if cfg!(target_arch = "wasm32") {
         // MSAA, tonemapping LUTs, and distance fog are unreliable on mobile WebGL2.
