@@ -119,6 +119,27 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_x: i32, chunk_z: i32) -> Optio
                     );
                     continue;
                 }
+                if block == BlockId::Lava || block == BlockId::Water {
+                    for (dir, face) in dirs {
+                        let neighbor =
+                            neighbor_block(world, chunk_x, chunk_z, x + dir[0], y + dir[1], z + dir[2]);
+                        if fluid_face_visible(neighbor) {
+                            push_face(
+                                &mut positions,
+                                &mut normals,
+                                &mut colors,
+                                &mut indices,
+                                x,
+                                y,
+                                z,
+                                dir,
+                                face,
+                                block,
+                            );
+                        }
+                    }
+                    continue;
+                }
                 if !block.solid() {
                     continue;
                 }
@@ -188,6 +209,13 @@ fn face_visible(block: BlockId, neighbor: BlockId) -> bool {
         return false;
     }
     neighbor.transparent()
+}
+
+fn fluid_face_visible(neighbor: BlockId) -> bool {
+    if neighbor == BlockId::Air {
+        return true;
+    }
+    !neighbor.solid() && neighbor != BlockId::Lava && neighbor != BlockId::Water
 }
 
 fn push_face(

@@ -14,7 +14,11 @@ pub const VOXEL_CHUNK_SHADER_HANDLE: Handle<Shader> =
 /// Minimal vertex-color material for voxel chunks.
 /// Avoids the full StandardMaterial PBR shader, which fails on many mobile WebGL2 GPUs.
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
-pub struct VoxelChunkMaterial {}
+pub struct VoxelChunkMaterial {
+    /// xyz = sun direction, w = daylight factor 0..1
+    #[uniform(0)]
+    pub sun_dir: Vec4,
+}
 
 impl Material for VoxelChunkMaterial {
     fn fragment_shader() -> ShaderRef {
