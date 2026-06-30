@@ -47,6 +47,10 @@ pub struct NavHud {
     pub landmarks: Vec<Landmark>,
     pub mob_blips: Vec<MobBlip>,
     pub refresh_timer: f32,
+    /// Horizontal heading for the radar; pitch never affects this value.
+    pub map_heading: f32,
+    pub last_px: i32,
+    pub last_pz: i32,
 }
 
 impl Default for NavHud {
@@ -57,8 +61,28 @@ impl Default for NavHud {
             landmarks: Vec::new(),
             mob_blips: Vec::new(),
             refresh_timer: 0.0,
+            map_heading: 0.0,
+            last_px: i32::MIN,
+            last_pz: i32::MIN,
         }
     }
+}
+
+/// Horizontal compass heading for the minimap. Uses body yaw only — never pitch.
+pub fn minimap_heading(yaw: f32) -> f32 {
+    let rot = Quat::from_rotation_y(yaw);
+    let flat = rot * Vec3::NEG_Z;
+    (-flat.x).atan2(-flat.z)
+}
+
+fn heading_changed(a: f32, b: f32) -> bool {
+    let delta = (b - a).rem_euclid(std::f32::consts::TAU);
+    let delta = if delta > std::f32::consts::PI {
+        delta - std::f32::consts::TAU
+    } else {
+        delta
+    };
+    delta.abs() > 0.0005
 }
 
 pub fn update_nav_hud(
@@ -74,13 +98,27 @@ pub fn update_nav_hud(
     }
 
     nav.refresh_timer -= time.delta_secs();
-    if nav.refresh_timer > 0.0 {
-        return;
-    }
-    nav.refresh_timer = MINIMAP_REFRESH_SECS;
 
     let px = player.position.x.floor() as i32;
     let pz = player.position.z.floor() as i32;
+    let heading = minimap_heading(player.yaw);
+    let moved = px != nav.last_px || pz != nav.last_pz;
+    let turned = heading_changed(heading, nav.map_heading);
+
+    if !moved && !turned && nav.refresh_timer > 0.0 {
+        return;
+    }
+
+    if turned {
+        nav.map_heading = heading;
+    }
+    if moved {
+        nav.last_px = px;
+        nav.last_pz = pz;
+    }
+    if nav.refresh_timer <= 0.0 {
+        nav.refresh_timer = MINIMAP_REFRESH_SECS;
+    }
 
     let preview = collect_landmarks(&world.inner, px, pz, LANDMARK_SEARCH_RADIUS);
     if let Some(village) = preview
@@ -98,6 +136,7 @@ pub fn update_nav_hud(
 
     let landmarks = nav.landmarks.clone();
     let mob_blips = nav.mob_blips.clone();
+    let map_heading = nav.map_heading;
     build_minimap(
         &mut nav.minimap_rgba,
         &world.inner,
@@ -105,7 +144,7 @@ pub fn update_nav_hud(
         &mob_blips,
         px,
         pz,
-        player.yaw,
+        map_heading,
     );
     nav.minimap_dirty = true;
 
@@ -544,5 +583,23 @@ mod tests {
             assert_eq!(wx, dx);
             assert_eq!(wz, dz);
         }
+    }
+
+    #[test]
+    fn minimap_heading_ignores_pitch_convention() {
+        let h0 = minimap_heading(0.75);
+        let h1 = minimap_heading(0.75);
+        assert!((h0 - h1).abs() < 1e-6);
+        assert!((h0 - 0.75).abs() < 1e-4);
+    }
+
+    #[test]
+    fn minimap_stable_when_only_position_heading_unchanged() {
+        let world = VoxelWorld::new(42);
+        let mut a = vec![0u8; MINIMAP_SIZE * MINIMAP_SIZE * 4];
+        let mut b = vec![0u8; MINIMAP_SIZE * MINIMAP_SIZE * 4];
+        build_minimap(&mut a, &world, &[], &[], 10, 20, 0.5);
+        build_minimap(&mut b, &world, &[], &[], 10, 20, 0.5);
+        assert_eq!(a, b);
     }
 }

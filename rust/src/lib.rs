@@ -173,9 +173,9 @@ pub fn run() {
             update_lights,
             update_chunk_material_lighting,
             update_fps,
-            update_nav_hud,
         ),
     );
+    app.add_systems(Update, update_nav_hud.after(mouse_look));
     app.add_systems(Update, update_clouds);
     app.add_systems(Update, update_sky.after(update_lights));
     app.add_systems(
