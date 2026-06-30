@@ -175,4 +175,5 @@ pub fn place_settlement(world: &mut VoxelWorld, center_x: i32, center_z: i32, su
     place_farm_plot(world, center_x + 2, pad_y + 1, center_z + 10, FARM_PATCH.width);
     place_farm_plot(world, center_x - 16, pad_y + 1, center_z + 8, 5);
     place_farm_plot(world, center_x + 14, pad_y + 1, center_z - 4, 4);
+    world.settlement_centers.push((center_x, center_z));
 }

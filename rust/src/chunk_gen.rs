@@ -101,6 +101,7 @@ pub fn ensure_volcanoes_near(world: &mut VoxelWorld, world_x: i32, world_z: i32,
         world.load_chunks_around(world_x, center_z);
         world.load_chunks_around(center_x, center_z);
         place_volcano(world, center_x, center_z);
+        world.volcano_centers.push((center_x, center_z));
         world.placed_volcanoes.insert((cell_x, cell_z));
         mark_feature_dirty(world, center_x, center_z, 3);
     }

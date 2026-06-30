@@ -599,4 +599,17 @@ mod tests {
         assert!(pos.x > start_x + 0.4, "leaves should not block movement, x={}", pos.x);
         assert!(!overlaps_solid(&world, pos, aabb));
     }
+
+    #[test]
+    fn player_walks_through_glass() {
+        let mut world = test_platform();
+        world.set_block(1, 1, 0, BlockId::Glass);
+        let aabb = Aabb::from_uniform(0.3, 1.7);
+        let mut pos = Vec3::new(0.5, 1.0, 0.5);
+        let mut vel = Vec3::new(6.0, 0.0, 0.0);
+        let start_x = pos.x;
+        move_aabb(&mut world, &mut pos, &mut vel, aabb, 0.1, true);
+        assert!(pos.x > start_x + 0.4, "glass windows should not block movement, x={}", pos.x);
+        assert!(!overlaps_solid(&world, pos, aabb));
+    }
 }
