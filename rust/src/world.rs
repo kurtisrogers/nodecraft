@@ -196,13 +196,13 @@ impl VoxelWorld {
     }
 
     pub fn find_safe_spawn(&mut self, preferred_x: i32, preferred_z: i32) -> (f32, f32, f32) {
-        if let Some((cx, cz)) = self.noise.settlement_center_near(preferred_x, preferred_z, 320) {
-            crate::chunk_gen::ensure_settlements_near(self, cx, cz, 64);
-            if let Some(pos) = self.find_spawn_in_area(cx, cz, 18) {
+        if let Some((cx, cz)) = self.noise.settlement_center_near(preferred_x, preferred_z, 480) {
+            crate::chunk_gen::ensure_settlements_near(self, cx, cz, 96);
+            if let Some(pos) = self.find_spawn_in_area(cx, cz, 28) {
                 return pos;
             }
         }
-        self.find_spawn_in_area(preferred_x, preferred_z, 40)
+        self.find_spawn_in_area(preferred_x, preferred_z, 48)
             .unwrap_or((0.5, 40.0, 0.5))
     }
 
@@ -246,7 +246,15 @@ impl VoxelWorld {
                     continue;
                 }
                 let dist = (x - preferred_x).abs() + (z - preferred_z).abs();
-                let village_bonus = if self.noise.is_in_settlement(x, z) { 200 } else { 0 };
+                let village_bonus = if self.noise.is_in_settlement(x, z) {
+                    400
+                } else if self.settlement_centers.iter().any(|&(cx, cz)| {
+                    (x - cx).abs() <= 24 && (z - cz).abs() <= 24
+                }) {
+                    250
+                } else {
+                    0
+                };
                 let score = openness * 5 - dist + village_bonus;
                 if best.map(|b| score > b.3).unwrap_or(true) {
                     best = Some((x, z, spawn_y, score));

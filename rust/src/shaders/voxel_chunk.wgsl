@@ -20,7 +20,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let n = normalize(in.world_normal);
     let sun = normalize(material.sun_dir.xyz);
     let shade = clamp(dot(n, sun) * 0.5 + 0.5, 0.0, 1.0);
-    let light = mix(0.38 + night * 0.22, 0.48 + shade * 0.58, day);
+    let light = mix(0.28 + night * 0.18, 0.34 + shade * 0.78, day);
     var rgb = base.rgb * light;
     if base.r > 0.78 && base.g < 0.42 && base.b < 0.25 {
         let glow = 0.55 + 0.45 * (1.0 - day * 0.35);
