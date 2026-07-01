@@ -128,8 +128,8 @@ pub fn update_lights(
         transform.rotation = Quat::from_rotation_x(state.moon_angle);
     }
 
-    let day_ambient = 180.0 + state.daylight * 680.0;
-    let night_ambient = 140.0 + state.moonlight * 380.0;
+    let day_ambient = 90.0 + state.daylight * 420.0;
+    let night_ambient = 70.0 + state.moonlight * 260.0;
     let mut brightness = day_ambient + night_ambient;
     if cfg!(target_arch = "wasm32") {
         // Keep nights readable on mobile without washing out stars/sky.

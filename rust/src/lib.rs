@@ -30,6 +30,8 @@ use bevy::prelude::*;
 use bevy::window::PresentMode;
 use bevy::render::view::RenderLayers;
 #[cfg(not(target_arch = "wasm32"))]
+use bevy::pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
+#[cfg(not(target_arch = "wasm32"))]
 use bevy_egui::EguiPlugin;
 use chunk_material::{VoxelChunkMaterial, VoxelChunkMaterialPlugin};
 use config::{DEFAULT_SEED, WASM_BOOT_CHUNK_RADIUS, WASM_RENDER_DISTANCE};
@@ -259,18 +261,41 @@ fn setup_scene(
 ) {
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.85, 0.88, 0.92),
-        brightness: if cfg!(target_arch = "wasm32") { 1200.0 } else { 400.0 },
+        brightness: if cfg!(target_arch = "wasm32") { 1200.0 } else { 280.0 },
     });
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 12000.0,
-            shadows_enabled: !cfg!(target_arch = "wasm32"),
-            ..default()
-        },
-        SunLight,
-        RenderLayers::from_layers(&[0, 1]),
-        Transform::from_xyz(50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
+    let sun = DirectionalLight {
+        illuminance: 12000.0,
+        shadows_enabled: !cfg!(target_arch = "wasm32"),
+        shadow_depth_bias: 0.02,
+        shadow_normal_bias: 1.2,
+        ..default()
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        commands.insert_resource(DirectionalLightShadowMap { size: 2048 });
+        commands.spawn((
+            sun,
+            SunLight,
+            RenderLayers::from_layers(&[0, 1]),
+            Transform::from_xyz(50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
+            CascadeShadowConfigBuilder {
+                maximum_distance: 220.0,
+                first_cascade_far_bound: 18.0,
+                minimum_distance: 0.1,
+                ..default()
+            }
+            .build(),
+        ));
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        commands.spawn((
+            sun,
+            SunLight,
+            RenderLayers::from_layers(&[0, 1]),
+            Transform::from_xyz(50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ));
+    }
     commands.spawn((
         DirectionalLight {
             illuminance: 0.0,

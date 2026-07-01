@@ -47,8 +47,6 @@ pub struct NavHud {
     pub landmarks: Vec<Landmark>,
     pub mob_blips: Vec<MobBlip>,
     pub refresh_timer: f32,
-    /// Horizontal heading for the radar; pitch never affects this value.
-    pub map_heading: f32,
     pub last_px: i32,
     pub last_pz: i32,
 }
@@ -61,28 +59,10 @@ impl Default for NavHud {
             landmarks: Vec::new(),
             mob_blips: Vec::new(),
             refresh_timer: 0.0,
-            map_heading: 0.0,
             last_px: i32::MIN,
             last_pz: i32::MIN,
         }
     }
-}
-
-/// Horizontal compass heading for the minimap. Uses body yaw only — never pitch.
-pub fn minimap_heading(yaw: f32) -> f32 {
-    let rot = Quat::from_rotation_y(yaw);
-    let flat = rot * Vec3::NEG_Z;
-    (-flat.x).atan2(-flat.z)
-}
-
-fn heading_changed(a: f32, b: f32) -> bool {
-    let delta = (b - a).rem_euclid(std::f32::consts::TAU);
-    let delta = if delta > std::f32::consts::PI {
-        delta - std::f32::consts::TAU
-    } else {
-        delta
-    };
-    delta.abs() > 0.0005
 }
 
 pub fn update_nav_hud(
@@ -101,17 +81,12 @@ pub fn update_nav_hud(
 
     let px = player.position.x.floor() as i32;
     let pz = player.position.z.floor() as i32;
-    let heading = minimap_heading(player.yaw);
     let moved = px != nav.last_px || pz != nav.last_pz;
-    let turned = heading_changed(heading, nav.map_heading);
 
-    if !moved && !turned && nav.refresh_timer > 0.0 {
+    if !moved && nav.refresh_timer > 0.0 {
         return;
     }
 
-    if turned {
-        nav.map_heading = heading;
-    }
     if moved {
         nav.last_px = px;
         nav.last_pz = pz;
@@ -136,7 +111,6 @@ pub fn update_nav_hud(
 
     let landmarks = nav.landmarks.clone();
     let mob_blips = nav.mob_blips.clone();
-    let map_heading = nav.map_heading;
     build_minimap(
         &mut nav.minimap_rgba,
         &world.inner,
@@ -144,7 +118,7 @@ pub fn update_nav_hud(
         &mob_blips,
         px,
         pz,
-        map_heading,
+        player.yaw,
     );
     nav.minimap_dirty = true;
 
@@ -279,16 +253,11 @@ fn block_distance(ax: i32, az: i32, bx: i32, bz: i32) -> f32 {
     (dx * dx + dz * dz).sqrt()
 }
 
-/// Map world offset to screen pixel (heading-up: forward = top of map).
-/// Matches player forward `(-sin(yaw), -cos(yaw))` and right `(cos(yaw), -sin(yaw))`.
-fn world_offset_to_map(dx: f32, dz: f32, yaw: f32, half: i32) -> (i32, i32) {
-    let cos_yaw = yaw.cos();
-    let sin_yaw = yaw.sin();
-    let right = dx * cos_yaw - dz * sin_yaw;
-    let ahead = -dx * sin_yaw - dz * cos_yaw;
+/// Map world offset to screen pixel (north-up: -Z = top, +X = right).
+fn world_offset_to_map(dx: f32, dz: f32, half: i32) -> (i32, i32) {
     (
-        (half as f32 + right).round() as i32,
-        (half as f32 - ahead).round() as i32,
+        (half as f32 + dx).round() as i32,
+        (half as f32 + dz).round() as i32,
     )
 }
 
@@ -303,8 +272,6 @@ pub fn build_minimap(
 ) {
     let size = MINIMAP_SIZE as i32;
     let half = MINIMAP_RADIUS;
-    let cos_yaw = player_yaw.cos();
-    let sin_yaw = player_yaw.sin();
     let radius_sq = (half as f32 - 1.5).powi(2);
 
     for pixel in out.chunks_mut(4) {
@@ -313,13 +280,11 @@ pub fn build_minimap(
 
     for py in 0..size {
         for px in 0..size {
-            let right = (px - half) as f32;
-            let ahead = (half - py) as f32;
-            if right * right + ahead * ahead > radius_sq {
+            let dx = (px - half) as f32;
+            let dz = (py - half) as f32;
+            if dx * dx + dz * dz > radius_sq {
                 continue;
             }
-            let dx = right * cos_yaw - ahead * sin_yaw;
-            let dz = right * sin_yaw - ahead * cos_yaw;
             let wx = player_x + dx.round() as i32;
             let wz = player_z + dz.round() as i32;
             let idx = ((py * size + px) * 4) as usize;
@@ -332,7 +297,7 @@ pub fn build_minimap(
     for landmark in landmarks {
         let dx = (landmark.x - player_x) as f32;
         let dz = (landmark.z - player_z) as f32;
-        let (mx, mz) = world_offset_to_map(dx, dz, player_yaw, half);
+        let (mx, mz) = world_offset_to_map(dx, dz, half);
         let color = match landmark.kind {
             LandmarkKind::Village if landmark.discovered => [255, 220, 60, 255],
             LandmarkKind::Village => [255, 200, 60, 160],
@@ -346,7 +311,7 @@ pub fn build_minimap(
     for mob in mob_blips {
         let dx = (mob.x - player_x) as f32;
         let dz = (mob.z - player_z) as f32;
-        let (mx, mz) = world_offset_to_map(dx, dz, player_yaw, half);
+        let (mx, mz) = world_offset_to_map(dx, dz, half);
         let color = if mob.hostile {
             [255, 45, 45, 255]
         } else {
@@ -355,7 +320,8 @@ pub fn build_minimap(
         stamp_marker(out, size, mx, mz, 2, color);
     }
 
-    stamp_player_heading_up(out, size, half, half);
+    stamp_north_label(out, size, half);
+    stamp_player_facing(out, size, half, half, player_yaw);
 }
 
 fn terrain_color_world(world: &VoxelWorld, wx: i32, wz: i32) -> [u8; 4] {
@@ -447,14 +413,32 @@ fn stamp_marker(out: &mut [u8], size: i32, cx: i32, cz: i32, radius: i32, color:
     }
 }
 
-/// Player at center; wedge always points up (forward).
-fn stamp_player_heading_up(out: &mut [u8], size: i32, cx: i32, cz: i32) {
+/// Small "N" at the top of the map (world -Z).
+fn stamp_north_label(out: &mut [u8], size: i32, half: i32) {
+    let color = [200, 220, 255, 255];
+    let cx = half;
+    let cz = 3;
+    stamp_marker(out, size, cx, cz, 0, color);
+    stamp_marker(out, size, cx - 1, cz + 1, 0, color);
+    stamp_marker(out, size, cx + 1, cz + 1, 0, color);
+    stamp_marker(out, size, cx, cz + 2, 0, color);
+}
+
+/// Player at center; wedge shows facing direction on the fixed north-up map.
+fn stamp_player_facing(out: &mut [u8], size: i32, cx: i32, cz: i32, yaw: f32) {
     stamp_marker(out, size, cx, cz, 2, [80, 220, 255, 255]);
+    let sin_yaw = yaw.sin();
+    let cos_yaw = yaw.cos();
+    let perp_x = (-cos_yaw).round() as i32;
+    let perp_z = (-sin_yaw).round() as i32;
     for i in 0..6 {
-        stamp_marker(out, size, cx, cz - 3 - i, 0, [235, 250, 255, 255]);
+        let d = 3 + i;
+        let tx = cx + (sin_yaw * d as f32).round() as i32;
+        let tz = cz - (cos_yaw * d as f32).round() as i32;
+        stamp_marker(out, size, tx, tz, 0, [235, 250, 255, 255]);
         if i > 0 {
-            stamp_marker(out, size, cx - 1, cz - 3 - i, 0, [235, 250, 255, 255]);
-            stamp_marker(out, size, cx + 1, cz - 3 - i, 0, [235, 250, 255, 255]);
+            stamp_marker(out, size, tx + perp_x, tz + perp_z, 0, [235, 250, 255, 255]);
+            stamp_marker(out, size, tx - perp_x, tz - perp_z, 0, [235, 250, 255, 255]);
         }
     }
 }
@@ -508,7 +492,7 @@ pub fn draw_nav_hud(
                     }
                 });
                 ui.label(
-                    egui::RichText::new("▲ ahead · gold village · red enemy · pink animal")
+                    egui::RichText::new("N up · ▲ facing · gold village · red enemy · pink animal")
                         .size(10.0)
                         .color(egui::Color32::from_rgb(170, 180, 200)),
                 );
@@ -553,48 +537,51 @@ mod tests {
     }
 
     #[test]
-    fn heading_up_places_forward_at_top() {
-        let (mx, mz) = world_offset_to_map(0.0, -10.0, 0.0, 40);
+    fn north_up_places_negative_z_at_top() {
+        let (mx, mz) = world_offset_to_map(0.0, -10.0, 40);
         assert_eq!(mx, 40);
-        assert!(mz < 40, "ahead should map above center");
+        assert_eq!(mz, 30, "north (-Z) should map above center");
     }
 
     #[test]
-    fn heading_up_matches_player_forward_at_yaw_zero() {
-        // Player forward at yaw=0 is -Z; walking forward decreases z.
-        let (mx, mz) = world_offset_to_map(0.0, -20.0, 0.0, 40);
-        assert_eq!(mx, 40, "dead ahead stays centered");
-        assert_eq!(mz, 20, "ahead should be toward top of map");
+    fn north_up_keeps_east_on_the_right() {
+        let (mx, mz) = world_offset_to_map(15.0, 0.0, 40);
+        assert_eq!(mx, 55);
+        assert_eq!(mz, 40);
     }
 
     #[test]
     fn map_pixel_round_trips_world_offset() {
         let half = 40;
         for (dx, dz) in [(0, -20), (15, 0), (-8, 12)] {
-            let (mx, mz) = world_offset_to_map(dx as f32, dz as f32, 0.0, half);
-            let right = mx - half;
-            let ahead = half - mz;
-            assert_eq!(right, dx, "right axis at yaw 0");
-            assert_eq!(ahead, -dz, "ahead axis at yaw 0");
-            let rdx = right as f32;
-            let rad = ahead as f32;
-            let wx = rdx.round() as i32;
-            let wz = -rad.round() as i32;
-            assert_eq!(wx, dx);
-            assert_eq!(wz, dz);
+            let (mx, mz) = world_offset_to_map(dx as f32, dz as f32, half);
+            assert_eq!(mx - half, dx);
+            assert_eq!(mz - half, dz);
         }
     }
 
     #[test]
-    fn minimap_heading_ignores_pitch_convention() {
-        let h0 = minimap_heading(0.75);
-        let h1 = minimap_heading(0.75);
-        assert!((h0 - h1).abs() < 1e-6);
-        assert!((h0 - 0.75).abs() < 1e-4);
+    fn minimap_terrain_stable_when_yaw_changes() {
+        let world = VoxelWorld::new(42);
+        let mut a = vec![0u8; MINIMAP_SIZE * MINIMAP_SIZE * 4];
+        let mut b = vec![0u8; MINIMAP_SIZE * MINIMAP_SIZE * 4];
+        build_minimap(&mut a, &world, &[], &[], 10, 20, 0.0);
+        build_minimap(&mut b, &world, &[], &[], 10, 20, 1.2);
+        // Terrain pixels match; only the player wedge differs.
+        let mut terrain_diffs = 0;
+        for (pa, pb) in a.chunks(4).zip(b.chunks(4)) {
+            if pa != pb {
+                terrain_diffs += 1;
+            }
+        }
+        assert!(
+            terrain_diffs < 80,
+            "yaw should not rotate terrain, got {terrain_diffs} pixel diffs"
+        );
     }
 
     #[test]
-    fn minimap_stable_when_only_position_heading_unchanged() {
+    fn minimap_stable_when_position_unchanged() {
         let world = VoxelWorld::new(42);
         let mut a = vec![0u8; MINIMAP_SIZE * MINIMAP_SIZE * 4];
         let mut b = vec![0u8; MINIMAP_SIZE * MINIMAP_SIZE * 4];

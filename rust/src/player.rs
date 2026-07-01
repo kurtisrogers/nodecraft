@@ -66,11 +66,8 @@ pub fn spawn_player(
     mut world: ResMut<VoxelWorldResource>,
     mut player: ResMut<PlayerState>,
 ) {
-    let spawn = if cfg!(target_arch = "wasm32") {
-        world.inner.find_quick_spawn(0, 0)
-    } else {
-        world.inner.find_safe_spawn(0, 0)
-    };
+    crate::chunk_gen::ensure_settlements_near(&mut world.inner, 0, 0, 320);
+    let spawn = world.inner.find_safe_spawn(0, 0);
     player.position = Vec3::new(spawn.0, spawn.1, spawn.2);
     player.velocity = Vec3::ZERO;
     player.pitch = if cfg!(target_arch = "wasm32") {
